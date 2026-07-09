@@ -1,0 +1,14 @@
+/* Banking UI Design Tokens - Shared with parent @atlas/ui tokens */
+:root {
+  --color-income: #10b981;
+  --color-expense: #ef4444;
+  --color-pending: #f59e0b;
+  --color-suspended: #6b7280;
+}
+
+.dark {
+  --color-income: #34d399;
+  --color-expense: #f87171;
+  --color-pending: #fbbf24;
+  --color-suspended: #9ca3af;
+}

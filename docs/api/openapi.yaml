@@ -1,0 +1,3768 @@
+openapi: 3.1.0
+info:
+  title: Atlas API Contract
+  version: 1.0.0
+  summary: Master API contract for Atlas platform clients and services.
+  description: |
+    Production-grade OpenAPI 3.1 contract for Atlas.
+
+    This specification is the single source of truth for:
+    - Web frontend
+    - Backend implementation
+    - Mobile clients
+    - Admin portal
+    - External integrations
+
+    Design guarantees:
+    - RESTful, versioned API under /api/v1
+    - Consistent response envelope
+    - Standardized errors
+    - Standardized pagination/filter/sort/search
+    - Typed request and response contracts
+
+    Note: This contract defines interfaces only. It intentionally contains no implementation logic.
+  contact:
+    name: Atlas API Platform Team
+    email: api-platform@atlas.local
+  license:
+    name: Proprietary
+jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
+servers:
+  - url: https://api.atlasbank.com/api/v1
+    description: Production
+  - url: https://staging-api.atlasbank.com/api/v1
+    description: Staging
+  - url: http://localhost:3001/api/v1
+    description: Local development
+tags:
+  - name: Authentication
+    description: Authentication, sessions, tokens, and identity access flows.
+  - name: Profile
+    description: Customer profile, preferences, security, and activity.
+  - name: Accounts
+    description: Bank account lifecycle, balances, and account metadata.
+  - name: Transactions
+    description: Ledger transactions, search, and categorization.
+  - name: Transfers
+    description: Internal and external money movement.
+  - name: Cards
+    description: Card issuance, controls, limits, and card activity.
+  - name: Crypto
+    description: Custody wallets, deposits, withdrawals, and trading.
+  - name: Investments
+    description: Brokerage accounts, positions, and order management.
+  - name: Loans
+    description: Loan applications, repayment, and schedules.
+  - name: Notifications
+    description: Notifications inbox and delivery preferences.
+  - name: Admin
+    description: Administrative and compliance management interfaces.
+  - name: Demo Mode
+    description: Sandbox lifecycle controls for demonstration environments.
+  - name: Health
+    description: Service health and readiness checks.
+  - name: Settings
+    description: Platform and customer-facing configuration references.
+security:
+  - bearerAuth: []
+  - sessionCookie: []
+paths:
+  /auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register a customer account
+      description: |
+        Creates a new customer account and initial profile shell.
+
+        Validation:
+        - Email must be RFC-compliant and unique.
+        - Password must satisfy platform password policy.
+        - Terms and privacy acceptance timestamps required.
+
+        Permissions: Public
+        Rate limit: 10 requests / 15 minutes per IP
+      operationId: registerCustomer
+      security: []
+      x-permissions:
+        - public
+      x-rateLimit:
+        scope: ip
+        burst: 10
+        window: 15m
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            examples:
+              default:
+                value:
+                  email: ava.simmons@example.com
+                  password: StrongPass!234
+                  firstName: Ava
+                  lastName: Simmons
+                  termsAcceptedAt: '2026-07-09T13:05:00Z'
+                  privacyAcceptedAt: '2026-07-09T13:05:00Z'
+      responses:
+        '201':
+          description: Customer account created.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AuthSession'
+              examples:
+                created:
+                  value:
+                    success: true
+                    data:
+                      accessToken: eyJhbGciOi...
+                      refreshToken: eyJhbGciOi...
+                      tokenType: Bearer
+                      expiresIn: 900
+                      sessionId: sess_7a2f31
+                    meta:
+                      traceId: trc_1001
+                      timestamp: '2026-07-09T13:05:04Z'
+                    error: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Authenticate customer credentials
+      description: |
+        Authenticates a customer and returns an access/refresh token pair.
+
+        Validation:
+        - Email and password required.
+        - Optional OTP challenge for MFA-enabled accounts.
+
+        Permissions: Public
+        Rate limit: 20 requests / 15 minutes per IP
+      operationId: loginCustomer
+      security: []
+      x-permissions: [public]
+      x-rateLimit:
+        scope: ip
+        burst: 20
+        window: 15m
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            examples:
+              default:
+                value:
+                  email: jordan.parker@atlasbank.com
+                  password: StrongPass!234
+                  otpCode: '123456'
+      responses:
+        '200':
+          description: Authentication successful.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AuthSession'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '423':
+          $ref: '#/components/responses/Locked'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/refresh:
+    post:
+      tags: [Authentication]
+      summary: Refresh access token
+      description: |
+        Issues a new short-lived access token using a refresh token.
+
+        Validation:
+        - Refresh token must be active and not revoked.
+
+        Permissions: Public with refresh token
+        Rate limit: 60 requests / hour per session
+      operationId: refreshAuthToken
+      security:
+        - refreshTokenCookie: []
+      x-permissions:
+        - refresh_token
+      x-rateLimit:
+        scope: session
+        burst: 60
+        window: 1h
+      requestBody:
+        required: false
+      responses:
+        '200':
+          description: Access token refreshed.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TokenRefreshResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      summary: End active session
+      description: |
+        Revokes the current session and invalidates tokens.
+
+        Permissions: customer:self
+        Rate limit: 120 requests / hour per user
+      operationId: logoutCustomer
+      x-permissions:
+        - customer:self
+      x-rateLimit:
+        scope: user
+        burst: 120
+        window: 1h
+      responses:
+        '200':
+          description: Session ended.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+              examples:
+                ok:
+                  value:
+                    success: true
+                    data:
+                      message: Session revoked.
+                    meta:
+                      traceId: trc_1002
+                      timestamp: '2026-07-09T13:08:00Z'
+                    error: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/password/forgot:
+    post:
+      tags: [Authentication]
+      summary: Start password reset
+      description: |
+        Initiates a password reset flow and sends reset instructions.
+
+        Permissions: Public
+        Rate limit: 5 requests / hour per email
+      operationId: initiatePasswordReset
+      security: []
+      x-permissions: [public]
+      x-rateLimit:
+        scope: subject
+        burst: 5
+        window: 1h
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+      responses:
+        '202':
+          description: Reset request accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /auth/password/reset:
+    post:
+      tags: [Authentication]
+      summary: Complete password reset
+      description: |
+        Resets account password using a reset token.
+
+        Validation:
+        - Reset token validity and expiration.
+        - New password policy validation.
+
+        Permissions: Public with valid reset token
+        Rate limit: 10 requests / hour per token
+      operationId: completePasswordReset
+      security: []
+      x-permissions: [public]
+      x-rateLimit:
+        scope: token
+        burst: 10
+        window: 1h
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '200':
+          description: Password reset completed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/sessions:
+    get:
+      tags: [Authentication]
+      summary: List active sessions
+      description: |
+        Returns sessions for the authenticated customer.
+
+        Supports filtering by status and ordering by last activity.
+
+        Permissions: customer:self
+        Rate limit: 300 requests / hour per user
+      operationId: listSessions
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 300
+        window: 1h
+      parameters:
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Order'
+        - $ref: '#/components/parameters/Search'
+      responses:
+        '200':
+          description: Session list returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Session'
+                      meta:
+                        $ref: '#/components/schemas/OffsetMeta'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/sessions/{sessionId}:
+    delete:
+      tags: [Authentication]
+      summary: Revoke a specific session
+      description: |
+        Revokes a single session by identifier.
+
+        Permissions: customer:self
+        Rate limit: 120 requests / hour per user
+      operationId: revokeSession
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 120
+        window: 1h
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Session revoked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /auth/oauth/providers:
+    get:
+      tags: [Authentication]
+      summary: List OAuth providers
+      description: |
+        Returns configured OAuth providers for future external identity support.
+
+        Permissions: Public
+        Rate limit: 300 requests / hour per IP
+      operationId: listOauthProviders
+      security: []
+      x-permissions: [public]
+      x-rateLimit:
+        scope: ip
+        burst: 300
+        window: 1h
+      responses:
+        '200':
+          description: OAuth providers returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/OAuthProvider'
+
+  /profile:
+    get:
+      tags: [Profile]
+      summary: Get customer profile
+      description: |
+        Returns personal, contact, compliance, and identity profile.
+
+        Permissions: customer:self
+        Rate limit: 600 requests / hour per user
+      operationId: getProfile
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 600
+        window: 1h
+      responses:
+        '200':
+          description: Profile returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Profile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    patch:
+      tags: [Profile]
+      summary: Update customer profile
+      description: |
+        Updates editable customer profile fields.
+
+        Validation:
+        - Email format, phone format, postal fields, and tax metadata constraints.
+        - Immutable fields rejected with validation error.
+
+        Permissions: customer:self
+        Rate limit: 120 requests / hour per user
+      operationId: updateProfile
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 120
+        window: 1h
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfilePatchRequest'
+      responses:
+        '200':
+          description: Profile updated.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Profile'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /profile/preferences:
+    get:
+      tags: [Profile]
+      summary: Get profile preferences
+      description: |
+        Returns theme, language, timezone, accessibility, and notification preferences.
+
+        Permissions: customer:self
+        Rate limit: 600 requests / hour per user
+      operationId: getProfilePreferences
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 600
+        window: 1h
+      responses:
+        '200':
+          description: Preferences returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ProfilePreferences'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    patch:
+      tags: [Profile]
+      summary: Update profile preferences
+      description: |
+        Updates customer preferences.
+
+        Validation:
+        - Enumerated values for language/theme.
+        - Currency and timezone must be supported values.
+
+        Permissions: customer:self
+        Rate limit: 120 requests / hour per user
+      operationId: patchProfilePreferences
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 120
+        window: 1h
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfilePreferencesPatchRequest'
+      responses:
+        '200':
+          description: Preferences updated.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ProfilePreferences'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /profile/security:
+    get:
+      tags: [Profile]
+      summary: Get profile security settings
+      description: |
+        Returns security controls, trusted devices, and active sessions.
+
+        Permissions: customer:self
+        Rate limit: 300 requests / hour per user
+      operationId: getProfileSecurity
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 300
+        window: 1h
+      responses:
+        '200':
+          description: Security profile returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ProfileSecurity'
+    patch:
+      tags: [Profile]
+      summary: Update profile security settings
+      description: |
+        Updates profile security controls such as MFA and session settings.
+
+        Permissions: customer:self
+        Rate limit: 60 requests / hour per user
+      operationId: patchProfileSecurity
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 60
+        window: 1h
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileSecurityPatchRequest'
+      responses:
+        '200':
+          description: Security settings updated.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ProfileSecurity'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+
+  /profile/activity:
+    get:
+      tags: [Profile]
+      summary: List profile activity
+      description: |
+        Returns profile-related activity feed.
+
+        Supports standardized filtering, sorting, search, and pagination.
+
+        Permissions: customer:self
+        Rate limit: 600 requests / hour per user
+      operationId: listProfileActivity
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 600
+        window: 1h
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Order'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/FromDate'
+        - $ref: '#/components/parameters/ToDate'
+      responses:
+        '200':
+          description: Activity items returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ActivityItem'
+                      meta:
+                        $ref: '#/components/schemas/CursorMeta'
+
+  /accounts:
+    get:
+      tags: [Accounts]
+      summary: List accounts
+      description: |
+        Returns customer accounts.
+
+        Supports filtering by status/type and standardized sort/search/pagination.
+
+        Permissions: customer:self
+        Rate limit: 1000 requests / hour per user
+      operationId: listAccounts
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 1000
+        window: 1h
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Order'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/AccountStatus'
+        - $ref: '#/components/parameters/AccountType'
+      responses:
+        '200':
+          description: Accounts returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Account'
+                      meta:
+                        $ref: '#/components/schemas/CursorMeta'
+    post:
+      tags: [Accounts]
+      summary: Create account
+      description: |
+        Creates a new account product for the customer.
+
+        Permissions: customer:self
+        Rate limit: 20 requests / day per user
+      operationId: createAccount
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 20
+        window: 24h
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountCreateRequest'
+      responses:
+        '201':
+          description: Account created.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Account'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /accounts/{accountId}:
+    get:
+      tags: [Accounts]
+      summary: Get account details
+      description: |
+        Returns a single account by identifier.
+
+        Permissions: customer:self
+        Rate limit: 1200 requests / hour per user
+      operationId: getAccountById
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 1200
+        window: 1h
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+      responses:
+        '200':
+          description: Account returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Account'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Accounts]
+      summary: Update account settings
+      description: |
+        Updates mutable account preferences and nicknames.
+
+        Permissions: customer:self
+        Rate limit: 60 requests / hour per user
+      operationId: patchAccountById
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 60
+        window: 1h
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountPatchRequest'
+      responses:
+        '200':
+          description: Account updated.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Account'
+
+  /accounts/{accountId}/balances:
+    get:
+      tags: [Accounts]
+      summary: Get account balances
+      description: |
+        Returns available/current/ledger balances for an account.
+
+        Permissions: customer:self
+        Rate limit: 1800 requests / hour per user
+      operationId: getAccountBalances
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 1800
+        window: 1h
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+      responses:
+        '200':
+          description: Balances returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AccountBalance'
+
+  /accounts/{accountId}/statements:
+    get:
+      tags: [Accounts]
+      summary: List account statements
+      description: |
+        Returns account statement history.
+
+        Supports pagination, sorting, and date filtering.
+
+        Permissions: customer:self
+        Rate limit: 300 requests / hour per user
+      operationId: listAccountStatements
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 300
+        window: 1h
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Order'
+        - $ref: '#/components/parameters/FromDate'
+        - $ref: '#/components/parameters/ToDate'
+      responses:
+        '200':
+          description: Statements returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Statement'
+                      meta:
+                        $ref: '#/components/schemas/OffsetMeta'
+
+  /transactions:
+    get:
+      tags: [Transactions]
+      summary: List transactions
+      description: |
+        Returns transactions across customer accounts.
+
+        Supports standardized cursor and offset pagination, filter, sort, and full-text search.
+
+        Permissions: customer:self
+        Rate limit: 1200 requests / hour per user
+      operationId: listTransactions
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 1200
+        window: 1h
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Order'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/FromDate'
+        - $ref: '#/components/parameters/ToDate'
+        - $ref: '#/components/parameters/TransactionStatus'
+        - $ref: '#/components/parameters/TransactionType'
+      responses:
+        '200':
+          description: Transactions returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Transaction'
+                      meta:
+                        $ref: '#/components/schemas/ListMeta'
+
+  /transactions/{transactionId}:
+    get:
+      tags: [Transactions]
+      summary: Get transaction by id
+      description: |
+        Returns transaction details.
+
+        Permissions: customer:self
+        Rate limit: 2400 requests / hour per user
+      operationId: getTransactionById
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 2400
+        window: 1h
+      parameters:
+        - $ref: '#/components/parameters/TransactionId'
+      responses:
+        '200':
+          description: Transaction returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Transaction'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /transfers:
+    get:
+      tags: [Transfers]
+      summary: List transfers
+      description: |
+        Returns transfer history for the customer.
+
+        Supports filtering and sorting.
+
+        Permissions: customer:self
+        Rate limit: 600 requests / hour per user
+      operationId: listTransfers
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 600
+        window: 1h
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Order'
+        - $ref: '#/components/parameters/TransferStatus'
+      responses:
+        '200':
+          description: Transfers returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Transfer'
+                      meta:
+                        $ref: '#/components/schemas/CursorMeta'
+    post:
+      tags: [Transfers]
+      summary: Create transfer
+      description: |
+        Creates a transfer instruction.
+
+        Validation:
+        - Source and destination validation.
+        - Amount and currency validation.
+        - Transfer rail-specific fields.
+
+        Permissions: customer:self
+        Rate limit: 120 requests / hour per user
+      operationId: createTransfer
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 120
+        window: 1h
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferCreateRequest'
+      responses:
+        '201':
+          description: Transfer created.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Transfer'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '422':
+          $ref: '#/components/responses/BusinessRuleViolation'
+
+  /transfers/{transferId}:
+    get:
+      tags: [Transfers]
+      summary: Get transfer details
+      description: |
+        Returns a transfer by id.
+
+        Permissions: customer:self
+        Rate limit: 1200 requests / hour per user
+      operationId: getTransferById
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 1200
+        window: 1h
+      parameters:
+        - $ref: '#/components/parameters/TransferId'
+      responses:
+        '200':
+          description: Transfer returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Transfer'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /transfers/{transferId}/cancel:
+    post:
+      tags: [Transfers]
+      summary: Cancel transfer
+      description: |
+        Cancels an eligible transfer.
+
+        Permissions: customer:self
+        Rate limit: 60 requests / hour per user
+      operationId: cancelTransfer
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 60
+        window: 1h
+      parameters:
+        - $ref: '#/components/parameters/TransferId'
+      responses:
+        '200':
+          description: Transfer cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /cards:
+    get:
+      tags: [Cards]
+      summary: List cards
+      description: |
+        Returns card instruments for customer accounts.
+
+        Permissions: customer:self
+        Rate limit: 1000 requests / hour per user
+      operationId: listCards
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 1000
+        window: 1h
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/CardStatus'
+        - $ref: '#/components/parameters/CardType'
+      responses:
+        '200':
+          description: Cards returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Card'
+                      meta:
+                        $ref: '#/components/schemas/CursorMeta'
+    post:
+      tags: [Cards]
+      summary: Issue card
+      description: |
+        Requests issuance of a physical or virtual card.
+
+        Permissions: customer:self
+        Rate limit: 10 requests / day per user
+      operationId: issueCard
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 10
+        window: 24h
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardIssueRequest'
+      responses:
+        '201':
+          description: Card issued.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Card'
+
+  /cards/{cardId}:
+    get:
+      tags: [Cards]
+      summary: Get card details
+      description: |
+        Returns card metadata and control state.
+
+        Permissions: customer:self
+        Rate limit: 1200 requests / hour per user
+      operationId: getCardById
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 1200
+        window: 1h
+      parameters:
+        - $ref: '#/components/parameters/CardId'
+      responses:
+        '200':
+          description: Card returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Card'
+    patch:
+      tags: [Cards]
+      summary: Update card settings
+      description: |
+        Updates card nickname and spending controls.
+
+        Permissions: customer:self
+        Rate limit: 120 requests / hour per user
+      operationId: patchCardById
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 120
+        window: 1h
+      parameters:
+        - $ref: '#/components/parameters/CardId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardPatchRequest'
+      responses:
+        '200':
+          description: Card updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+
+  /cards/{cardId}/freeze:
+    post:
+      tags: [Cards]
+      summary: Freeze card
+      description: |
+        Temporarily blocks card authorizations.
+
+        Permissions: customer:self
+        Rate limit: 60 requests / hour per user
+      operationId: freezeCard
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 60
+        window: 1h
+      parameters:
+        - $ref: '#/components/parameters/CardId'
+      responses:
+        '200':
+          description: Card frozen.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+
+  /cards/{cardId}/unfreeze:
+    post:
+      tags: [Cards]
+      summary: Unfreeze card
+      description: |
+        Restores card authorization capability.
+
+        Permissions: customer:self
+        Rate limit: 60 requests / hour per user
+      operationId: unfreezeCard
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 60
+        window: 1h
+      parameters:
+        - $ref: '#/components/parameters/CardId'
+      responses:
+        '200':
+          description: Card unfrozen.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+
+  /cards/{cardId}/transactions:
+    get:
+      tags: [Cards]
+      summary: List card transactions
+      description: |
+        Returns card transaction history.
+
+        Supports standardized filtering and sorting.
+
+        Permissions: customer:self
+        Rate limit: 1200 requests / hour per user
+      operationId: listCardTransactions
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 1200
+        window: 1h
+      parameters:
+        - $ref: '#/components/parameters/CardId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Order'
+        - $ref: '#/components/parameters/FromDate'
+        - $ref: '#/components/parameters/ToDate'
+      responses:
+        '200':
+          description: Card transactions returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/CardTransaction'
+                      meta:
+                        $ref: '#/components/schemas/CursorMeta'
+
+  /crypto/assets:
+    get:
+      tags: [Crypto]
+      summary: List supported crypto assets
+      description: |
+        Returns tradeable and custody-supported assets.
+
+        Permissions: customer:self
+        Rate limit: 1000 requests / hour per user
+      operationId: listCryptoAssets
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 1000
+        window: 1h
+      responses:
+        '200':
+          description: Assets returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/CryptoAsset'
+
+  /crypto/wallets:
+    get:
+      tags: [Crypto]
+      summary: List crypto wallets
+      description: |
+        Returns wallet balances and state.
+
+        Permissions: customer:self
+        Rate limit: 1200 requests / hour per user
+      operationId: listCryptoWallets
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 1200
+        window: 1h
+      responses:
+        '200':
+          description: Wallets returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/CryptoWallet'
+
+  /crypto/deposits/address:
+    post:
+      tags: [Crypto]
+      summary: Generate deposit address
+      description: |
+        Creates or returns a custody deposit address for an asset/network pair.
+
+        Permissions: customer:self
+        Rate limit: 200 requests / hour per user
+      operationId: createDepositAddress
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 200
+        window: 1h
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CryptoDepositAddressRequest'
+      responses:
+        '200':
+          description: Deposit address returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/CryptoDepositAddress'
+
+  /crypto/withdrawals:
+    post:
+      tags: [Crypto]
+      summary: Create crypto withdrawal
+      description: |
+        Creates a crypto withdrawal request.
+
+        Validation:
+        - Whitelist checks and blockchain address validation.
+        - Travel rule and jurisdiction checks.
+
+        Permissions: customer:self
+        Rate limit: 40 requests / hour per user
+      operationId: createCryptoWithdrawal
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 40
+        window: 1h
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CryptoWithdrawalRequest'
+      responses:
+        '201':
+          description: Withdrawal created.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/CryptoWithdrawal'
+        '422':
+          $ref: '#/components/responses/BusinessRuleViolation'
+
+  /crypto/trades/quote:
+    post:
+      tags: [Crypto]
+      summary: Create crypto trade quote
+      description: |
+        Returns a time-bounded quote for buy/sell request.
+
+        Permissions: customer:self
+        Rate limit: 300 requests / hour per user
+      operationId: quoteCryptoTrade
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 300
+        window: 1h
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CryptoTradeQuoteRequest'
+      responses:
+        '200':
+          description: Quote returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/CryptoTradeQuote'
+
+  /crypto/trades:
+    post:
+      tags: [Crypto]
+      summary: Execute crypto trade
+      description: |
+        Executes a crypto trade using a valid quote.
+
+        Permissions: customer:self
+        Rate limit: 120 requests / hour per user
+      operationId: executeCryptoTrade
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 120
+        window: 1h
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CryptoTradeExecuteRequest'
+      responses:
+        '201':
+          description: Trade executed.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/CryptoTrade'
+
+  /investments/accounts:
+    get:
+      tags: [Investments]
+      summary: List investment accounts
+      description: |
+        Returns brokerage/investment accounts.
+
+        Permissions: customer:self
+        Rate limit: 600 requests / hour per user
+      operationId: listInvestmentAccounts
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 600
+        window: 1h
+      responses:
+        '200':
+          description: Investment accounts returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/InvestmentAccount'
+
+  /investments/positions:
+    get:
+      tags: [Investments]
+      summary: List positions
+      description: |
+        Returns current positions for investment accounts.
+
+        Supports filtering by account and asset class.
+
+        Permissions: customer:self
+        Rate limit: 1200 requests / hour per user
+      operationId: listInvestmentPositions
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 1200
+        window: 1h
+      parameters:
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Order'
+      responses:
+        '200':
+          description: Positions returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/InvestmentPosition'
+
+  /investments/orders:
+    get:
+      tags: [Investments]
+      summary: List investment orders
+      description: |
+        Returns investment orders with filtering and pagination.
+
+        Permissions: customer:self
+        Rate limit: 1200 requests / hour per user
+      operationId: listInvestmentOrders
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 1200
+        window: 1h
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Order'
+      responses:
+        '200':
+          description: Orders returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/InvestmentOrder'
+                      meta:
+                        $ref: '#/components/schemas/CursorMeta'
+    post:
+      tags: [Investments]
+      summary: Create investment order
+      description: |
+        Places an investment order.
+
+        Permissions: customer:self
+        Rate limit: 120 requests / hour per user
+      operationId: createInvestmentOrder
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 120
+        window: 1h
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvestmentOrderCreateRequest'
+      responses:
+        '201':
+          description: Order created.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/InvestmentOrder'
+        '422':
+          $ref: '#/components/responses/BusinessRuleViolation'
+
+  /loans:
+    get:
+      tags: [Loans]
+      summary: List loans
+      description: |
+        Returns active and historical customer loans.
+
+        Permissions: customer:self
+        Rate limit: 400 requests / hour per user
+      operationId: listLoans
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 400
+        window: 1h
+      responses:
+        '200':
+          description: Loans returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Loan'
+
+  /loans/applications:
+    post:
+      tags: [Loans]
+      summary: Create loan application
+      description: |
+        Creates a new loan application.
+
+        Permissions: customer:self
+        Rate limit: 20 requests / day per user
+      operationId: createLoanApplication
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 20
+        window: 24h
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoanApplicationRequest'
+      responses:
+        '201':
+          description: Loan application created.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/LoanApplication'
+
+  /loans/{loanId}/schedule:
+    get:
+      tags: [Loans]
+      summary: Get loan repayment schedule
+      description: |
+        Returns projected and posted payment schedule.
+
+        Permissions: customer:self
+        Rate limit: 600 requests / hour per user
+      operationId: getLoanSchedule
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 600
+        window: 1h
+      parameters:
+        - $ref: '#/components/parameters/LoanId'
+      responses:
+        '200':
+          description: Schedule returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/LoanScheduleItem'
+
+  /loans/{loanId}/payments/quote:
+    post:
+      tags: [Loans]
+      summary: Quote loan payment
+      description: |
+        Returns payment quote including payoff or installment details.
+
+        Permissions: customer:self
+        Rate limit: 300 requests / hour per user
+      operationId: quoteLoanPayment
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 300
+        window: 1h
+      parameters:
+        - $ref: '#/components/parameters/LoanId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoanPaymentQuoteRequest'
+      responses:
+        '200':
+          description: Payment quote returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/LoanPaymentQuote'
+
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: List notifications
+      description: |
+        Returns customer notification inbox.
+
+        Supports filtering by read state, type, and channel.
+
+        Permissions: customer:self
+        Rate limit: 1200 requests / hour per user
+      operationId: listNotifications
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 1200
+        window: 1h
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Order'
+        - $ref: '#/components/parameters/Search'
+        - name: isRead
+          in: query
+          schema:
+            type: boolean
+          description: Filter by read state.
+      responses:
+        '200':
+          description: Notifications returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Notification'
+                      meta:
+                        $ref: '#/components/schemas/CursorMeta'
+
+  /notifications/{notificationId}/read:
+    patch:
+      tags: [Notifications]
+      summary: Mark notification as read
+      description: |
+        Marks a specific notification as read.
+
+        Permissions: customer:self
+        Rate limit: 600 requests / hour per user
+      operationId: markNotificationRead
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 600
+        window: 1h
+      parameters:
+        - $ref: '#/components/parameters/NotificationId'
+      responses:
+        '200':
+          description: Notification updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+
+  /notifications/read-all:
+    post:
+      tags: [Notifications]
+      summary: Mark all notifications as read
+      description: |
+        Marks all matching notifications as read.
+
+        Permissions: customer:self
+        Rate limit: 120 requests / hour per user
+      operationId: markAllNotificationsRead
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 120
+        window: 1h
+      responses:
+        '200':
+          description: Notifications updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+
+  /notifications/preferences:
+    get:
+      tags: [Notifications]
+      summary: Get notification preferences
+      description: |
+        Returns customer notification channel and topic preferences.
+
+        Permissions: customer:self
+        Rate limit: 600 requests / hour per user
+      operationId: getNotificationPreferences
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 600
+        window: 1h
+      responses:
+        '200':
+          description: Preferences returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/NotificationPreferences'
+    patch:
+      tags: [Notifications]
+      summary: Update notification preferences
+      description: |
+        Updates notification preferences.
+
+        Permissions: customer:self
+        Rate limit: 120 requests / hour per user
+      operationId: patchNotificationPreferences
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 120
+        window: 1h
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationPreferencesPatchRequest'
+      responses:
+        '200':
+          description: Preferences updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+
+  /admin/users:
+    get:
+      tags: [Admin]
+      summary: List users (admin)
+      description: |
+        Returns user directory for administrative operations.
+
+        Supports pagination, filtering, sorting, and search.
+
+        Permissions: admin:users:read
+        Rate limit: 900 requests / hour per admin user
+      operationId: adminListUsers
+      x-permissions: [admin:users:read]
+      x-rateLimit:
+        scope: user
+        burst: 900
+        window: 1h
+      parameters:
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Order'
+        - $ref: '#/components/parameters/Search'
+      responses:
+        '200':
+          description: Users returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/AdminUserSummary'
+                      meta:
+                        $ref: '#/components/schemas/OffsetMeta'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/users/{userId}/status:
+    patch:
+      tags: [Admin]
+      summary: Update user status (admin)
+      description: |
+        Changes customer status (for example ACTIVE, SUSPENDED).
+
+        Permissions: admin:users:write
+        Rate limit: 120 requests / hour per admin user
+      operationId: adminPatchUserStatus
+      x-permissions: [admin:users:write]
+      x-rateLimit:
+        scope: user
+        burst: 120
+        window: 1h
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminPatchUserStatusRequest'
+      responses:
+        '200':
+          description: User status updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+
+  /admin/transactions:
+    get:
+      tags: [Admin]
+      summary: List transactions (admin)
+      description: |
+        Returns transactions requiring operational review.
+
+        Permissions: admin:transactions:read
+        Rate limit: 1200 requests / hour per admin user
+      operationId: adminListTransactions
+      x-permissions: [admin:transactions:read]
+      x-rateLimit:
+        scope: user
+        burst: 1200
+        window: 1h
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Order'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/TransactionStatus'
+      responses:
+        '200':
+          description: Transactions returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Transaction'
+                      meta:
+                        $ref: '#/components/schemas/CursorMeta'
+
+  /admin/audit-logs:
+    get:
+      tags: [Admin]
+      summary: List audit logs
+      description: |
+        Returns audit logs with filtering and pagination.
+
+        Permissions: admin:audit:read
+        Rate limit: 900 requests / hour per admin user
+      operationId: adminListAuditLogs
+      x-permissions: [admin:audit:read]
+      x-rateLimit:
+        scope: user
+        burst: 900
+        window: 1h
+      parameters:
+        - $ref: '#/components/parameters/Offset'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Order'
+        - $ref: '#/components/parameters/Search'
+        - $ref: '#/components/parameters/FromDate'
+        - $ref: '#/components/parameters/ToDate'
+      responses:
+        '200':
+          description: Audit logs returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/AuditLog'
+                      meta:
+                        $ref: '#/components/schemas/OffsetMeta'
+
+  /demo-mode/state:
+    get:
+      tags: [Demo Mode]
+      summary: Get demo mode state
+      description: |
+        Returns current demo mode state and expiration.
+
+        Permissions: admin:demo:read
+        Rate limit: 600 requests / hour per admin user
+      operationId: getDemoModeState
+      x-permissions: [admin:demo:read]
+      x-rateLimit:
+        scope: user
+        burst: 600
+        window: 1h
+      responses:
+        '200':
+          description: Demo mode state returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/DemoModeState'
+
+  /demo-mode/enable:
+    post:
+      tags: [Demo Mode]
+      summary: Enable demo mode
+      description: |
+        Enables demo mode for a specified duration.
+
+        Permissions: admin:demo:write
+        Rate limit: 20 requests / hour per admin user
+      operationId: enableDemoMode
+      x-permissions: [admin:demo:write]
+      x-rateLimit:
+        scope: user
+        burst: 20
+        window: 1h
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DemoModeEnableRequest'
+      responses:
+        '200':
+          description: Demo mode enabled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+
+  /demo-mode/disable:
+    post:
+      tags: [Demo Mode]
+      summary: Disable demo mode
+      description: |
+        Disables demo mode.
+
+        Permissions: admin:demo:write
+        Rate limit: 20 requests / hour per admin user
+      operationId: disableDemoMode
+      x-permissions: [admin:demo:write]
+      x-rateLimit:
+        scope: user
+        burst: 20
+        window: 1h
+      responses:
+        '200':
+          description: Demo mode disabled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+
+  /demo-mode/reset:
+    post:
+      tags: [Demo Mode]
+      summary: Reset demo data
+      description: |
+        Resets all demo data to baseline fixtures.
+
+        Permissions: admin:demo:write
+        Rate limit: 5 requests / hour per admin user
+      operationId: resetDemoMode
+      x-permissions: [admin:demo:write]
+      x-rateLimit:
+        scope: user
+        burst: 5
+        window: 1h
+      responses:
+        '202':
+          description: Demo reset job accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+
+  /health:
+    get:
+      tags: [Health]
+      summary: Health summary
+      description: |
+        Returns aggregate service health status.
+
+        Permissions: Public
+        Rate limit: 3000 requests / hour per IP
+      operationId: getHealth
+      security: []
+      x-permissions: [public]
+      x-rateLimit:
+        scope: ip
+        burst: 3000
+        window: 1h
+      responses:
+        '200':
+          description: Health summary returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/HealthStatus'
+
+  /health/live:
+    get:
+      tags: [Health]
+      summary: Liveness probe
+      description: |
+        Returns process liveness status.
+
+        Permissions: Public
+        Rate limit: 10000 requests / hour per IP
+      operationId: getLiveness
+      security: []
+      x-permissions: [public]
+      x-rateLimit:
+        scope: ip
+        burst: 10000
+        window: 1h
+      responses:
+        '200':
+          description: Liveness status returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+
+  /health/ready:
+    get:
+      tags: [Health]
+      summary: Readiness probe
+      description: |
+        Returns dependency readiness status.
+
+        Permissions: Public
+        Rate limit: 10000 requests / hour per IP
+      operationId: getReadiness
+      security: []
+      x-permissions: [public]
+      x-rateLimit:
+        scope: ip
+        burst: 10000
+        window: 1h
+      responses:
+        '200':
+          description: Ready.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /settings:
+    get:
+      tags: [Settings]
+      summary: Get platform settings for customer context
+      description: |
+        Returns current platform settings resolved for customer context.
+
+        Permissions: customer:self
+        Rate limit: 600 requests / hour per user
+      operationId: getSettings
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 600
+        window: 1h
+      responses:
+        '200':
+          description: Settings returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Settings'
+    patch:
+      tags: [Settings]
+      summary: Patch customer settings
+      description: |
+        Updates mutable customer settings.
+
+        Permissions: customer:self
+        Rate limit: 120 requests / hour per user
+      operationId: patchSettings
+      x-permissions: [customer:self]
+      x-rateLimit:
+        scope: user
+        burst: 120
+        window: 1h
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SettingsPatchRequest'
+      responses:
+        '200':
+          description: Settings updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiEnvelope'
+
+  /settings/currencies:
+    get:
+      tags: [Settings]
+      summary: List supported currencies
+      description: |
+        Returns supported fiat currencies.
+
+        Permissions: Public
+        Rate limit: 1800 requests / hour per IP
+      operationId: listSupportedCurrencies
+      security: []
+      x-permissions: [public]
+      x-rateLimit:
+        scope: ip
+        burst: 1800
+        window: 1h
+      responses:
+        '200':
+          description: Currencies returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: string
+
+  /settings/timezones:
+    get:
+      tags: [Settings]
+      summary: List supported timezones
+      description: |
+        Returns supported timezone identifiers.
+
+        Permissions: Public
+        Rate limit: 1800 requests / hour per IP
+      operationId: listSupportedTimezones
+      security: []
+      x-permissions: [public]
+      x-rateLimit:
+        scope: ip
+        burst: 1800
+        window: 1h
+      responses:
+        '200':
+          description: Timezones returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: string
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token for authenticated customer/admin APIs.
+    refreshTokenCookie:
+      type: apiKey
+      in: cookie
+      name: refresh_token
+      description: Refresh token cookie used for token refresh endpoint.
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: atlas_session
+      description: Session cookie for session-based flows.
+    oauth2:
+      type: oauth2
+      description: Future OAuth 2.1 support for external integrations.
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.atlasbank.com/oauth2/authorize
+          tokenUrl: https://auth.atlasbank.com/oauth2/token
+          scopes:
+            atlas.read: Read access to Atlas resources.
+            atlas.write: Write access to Atlas resources.
+
+  parameters:
+    Cursor:
+      name: cursor
+      in: query
+      description: Cursor token for forward pagination.
+      schema:
+        type: string
+    Offset:
+      name: offset
+      in: query
+      description: Offset for offset pagination.
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    Limit:
+      name: limit
+      in: query
+      description: Maximum items to return.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 25
+    Sort:
+      name: sort
+      in: query
+      description: Field name used for sorting.
+      schema:
+        type: string
+    Order:
+      name: order
+      in: query
+      description: Sort direction.
+      schema:
+        type: string
+        enum: [asc, desc]
+        default: desc
+    Search:
+      name: search
+      in: query
+      description: Full-text search term.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 120
+    FromDate:
+      name: fromDate
+      in: query
+      description: Inclusive start datetime (ISO-8601).
+      schema:
+        type: string
+        format: date-time
+    ToDate:
+      name: toDate
+      in: query
+      description: Inclusive end datetime (ISO-8601).
+      schema:
+        type: string
+        format: date-time
+    AccountId:
+      name: accountId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    TransactionId:
+      name: transactionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    TransferId:
+      name: transferId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    CardId:
+      name: cardId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    LoanId:
+      name: loanId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    NotificationId:
+      name: notificationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AccountStatus:
+      name: status
+      in: query
+      schema:
+        type: string
+        enum: [ACTIVE, FROZEN, DORMANT, CLOSED, PENDING]
+    AccountType:
+      name: type
+      in: query
+      schema:
+        type: string
+        enum: [CHECKING, SAVINGS]
+    TransactionStatus:
+      name: status
+      in: query
+      schema:
+        type: string
+        enum: [PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED, REVERSED, ON_HOLD]
+    TransactionType:
+      name: type
+      in: query
+      schema:
+        type: string
+    TransferStatus:
+      name: status
+      in: query
+      schema:
+        type: string
+        enum: [DRAFT, PENDING_REVIEW, PENDING, PROCESSING, COMPLETED, FAILED, CANCELLED, RETURNED]
+    CardStatus:
+      name: status
+      in: query
+      schema:
+        type: string
+        enum: [ACTIVE, INACTIVE, FROZEN, CLOSED, PENDING_ACTIVATION, LOST, STOLEN]
+    CardType:
+      name: type
+      in: query
+      schema:
+        type: string
+        enum: [VIRTUAL, PHYSICAL]
+
+  responses:
+    BadRequest:
+      description: Malformed request.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    ValidationError:
+      description: Request validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          examples:
+            validation:
+              value:
+                success: false
+                data: null
+                meta:
+                  traceId: trc_4001
+                  timestamp: '2026-07-09T13:22:00Z'
+                error:
+                  type: validation_error
+                  code: VAL_001
+                  message: One or more fields failed validation.
+                  details:
+                    - field: email
+                      reason: Invalid email format.
+    Unauthorized:
+      description: Authentication failed or missing credentials.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Forbidden:
+      description: Authenticated but lacking required permission.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    NotFound:
+      description: Requested resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Conflict:
+      description: Resource conflict or incompatible state.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Locked:
+      description: Account temporarily locked.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    TooManyRequests:
+      description: Rate limit exceeded.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds to wait before retrying.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    BusinessRuleViolation:
+      description: Request violates business rule constraints.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    ServiceUnavailable:
+      description: Service dependency unavailable.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    InternalServerError:
+      description: Unexpected server failure.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+
+  schemas:
+    ApiEnvelope:
+      type: object
+      required: [success, data, meta, error]
+      properties:
+        success:
+          type: boolean
+        data:
+          nullable: true
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+        error:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/ErrorObject'
+    ErrorEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            success:
+              const: false
+            data:
+              type: 'null'
+            error:
+              $ref: '#/components/schemas/ErrorObject'
+    ResponseMeta:
+      type: object
+      required: [traceId, timestamp]
+      properties:
+        traceId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+        pagination:
+          $ref: '#/components/schemas/PaginationMeta'
+        rateLimit:
+          $ref: '#/components/schemas/RateLimitMeta'
+    PaginationMeta:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum: [cursor, offset]
+        cursor:
+          type: object
+          properties:
+            next:
+              type: string
+            previous:
+              type: string
+            hasMore:
+              type: boolean
+        offset:
+          type: object
+          properties:
+            total:
+              type: integer
+            offset:
+              type: integer
+            limit:
+              type: integer
+    RateLimitMeta:
+      type: object
+      properties:
+        limit:
+          type: integer
+        remaining:
+          type: integer
+        resetAt:
+          type: string
+          format: date-time
+    ErrorObject:
+      type: object
+      required: [type, code, message]
+      properties:
+        type:
+          type: string
+          enum:
+            - validation_error
+            - authentication_error
+            - authorization_error
+            - business_rule_error
+            - rate_limit_error
+            - server_error
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              reason:
+                type: string
+        traceId:
+          type: string
+
+    OffsetMeta:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                mode:
+                  const: offset
+                offset:
+                  type: object
+                  required: [total, offset, limit]
+                  properties:
+                    total:
+                      type: integer
+                    offset:
+                      type: integer
+                    limit:
+                      type: integer
+    CursorMeta:
+      allOf:
+        - $ref: '#/components/schemas/ResponseMeta'
+        - type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                mode:
+                  const: cursor
+                cursor:
+                  type: object
+                  required: [hasMore]
+                  properties:
+                    next:
+                      type: string
+                    previous:
+                      type: string
+                    hasMore:
+                      type: boolean
+    ListMeta:
+      oneOf:
+        - $ref: '#/components/schemas/CursorMeta'
+        - $ref: '#/components/schemas/OffsetMeta'
+
+    RegisterRequest:
+      type: object
+      required: [email, password, firstName, lastName, termsAcceptedAt, privacyAcceptedAt]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 12
+          maxLength: 128
+        firstName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        termsAcceptedAt:
+          type: string
+          format: date-time
+        privacyAcceptedAt:
+          type: string
+          format: date-time
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        otpCode:
+          type: string
+          pattern: '^[0-9]{6}$'
+    ForgotPasswordRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+    ResetPasswordRequest:
+      type: object
+      required: [token, newPassword]
+      properties:
+        token:
+          type: string
+        newPassword:
+          type: string
+          minLength: 12
+          maxLength: 128
+    AuthSession:
+      type: object
+      required: [accessToken, refreshToken, tokenType, expiresIn, sessionId]
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        tokenType:
+          type: string
+          enum: [Bearer]
+        expiresIn:
+          type: integer
+        sessionId:
+          type: string
+    TokenRefreshResponse:
+      type: object
+      required: [accessToken, tokenType, expiresIn]
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+          enum: [Bearer]
+        expiresIn:
+          type: integer
+    Session:
+      type: object
+      required: [id, device, ipAddress, createdAt, expiresAt, isCurrent]
+      properties:
+        id:
+          type: string
+          format: uuid
+        device:
+          type: string
+        ipAddress:
+          type: string
+        userAgent:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        isCurrent:
+          type: boolean
+
+    Profile:
+      type: object
+      required: [id, firstName, lastName, email, verificationStatus]
+      properties:
+        id:
+          type: string
+          format: uuid
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        phoneNumber:
+          type: string
+        dateOfBirth:
+          type: string
+          format: date
+        address:
+          $ref: '#/components/schemas/Address'
+        employment:
+          $ref: '#/components/schemas/Employment'
+        taxInfo:
+          $ref: '#/components/schemas/TaxInfo'
+        verificationStatus:
+          type: string
+          enum: [verified, pending, under_review]
+    ProfilePatchRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        firstName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        email:
+          type: string
+          format: email
+        phoneNumber:
+          type: string
+          minLength: 7
+          maxLength: 20
+        address:
+          $ref: '#/components/schemas/Address'
+        employment:
+          $ref: '#/components/schemas/Employment'
+        taxInfo:
+          $ref: '#/components/schemas/TaxInfo'
+    ProfilePreferences:
+      type: object
+      required: [language, currency, timezone, theme]
+      properties:
+        language:
+          type: string
+          enum: [en, es]
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        timezone:
+          type: string
+        theme:
+          type: string
+          enum: [light, dark, system]
+        accessibility:
+          type: object
+          properties:
+            reducedMotion:
+              type: boolean
+            highContrast:
+              type: boolean
+            largeText:
+              type: boolean
+            screenReaderOptimized:
+              type: boolean
+        notificationPreferences:
+          $ref: '#/components/schemas/NotificationPreferences'
+    ProfilePreferencesPatchRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        language:
+          type: string
+          enum: [en, es]
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        timezone:
+          type: string
+        theme:
+          type: string
+          enum: [light, dark, system]
+        accessibility:
+          type: object
+        notificationPreferences:
+          type: object
+    ProfileSecurity:
+      type: object
+      required: [mfaEnabled, loginAlertsEnabled, connectedDevices, activeSessions]
+      properties:
+        mfaEnabled:
+          type: boolean
+        mfaMethod:
+          type: string
+        loginAlertsEnabled:
+          type: boolean
+        biometricUnlockEnabled:
+          type: boolean
+        sessionTimeoutMinutes:
+          type: integer
+        connectedDevices:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConnectedDevice'
+        activeSessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Session'
+    ProfileSecurityPatchRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        mfaEnabled:
+          type: boolean
+        mfaMethod:
+          type: string
+        loginAlertsEnabled:
+          type: boolean
+        biometricUnlockEnabled:
+          type: boolean
+        sessionTimeoutMinutes:
+          type: integer
+          minimum: 5
+          maximum: 240
+    ActivityItem:
+      type: object
+      required: [id, type, title, description, occurredAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        occurredAt:
+          type: string
+          format: date-time
+
+    Address:
+      type: object
+      properties:
+        line1:
+          type: string
+        line2:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        postalCode:
+          type: string
+        country:
+          type: string
+          minLength: 2
+          maxLength: 2
+    Employment:
+      type: object
+      properties:
+        employerName:
+          type: string
+        jobTitle:
+          type: string
+        status:
+          type: string
+        annualIncomeRange:
+          type: string
+    TaxInfo:
+      type: object
+      properties:
+        taxResidencyCountry:
+          type: string
+          minLength: 2
+          maxLength: 2
+        taxIdMasked:
+          type: string
+        w9OnFile:
+          type: boolean
+
+    Account:
+      type: object
+      required: [id, name, type, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          type: string
+          enum: [CHECKING, SAVINGS]
+        status:
+          type: string
+        accountNumberMasked:
+          type: string
+        routingNumber:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    AccountBalance:
+      type: object
+      properties:
+        available:
+          type: number
+        current:
+          type: number
+        ledger:
+          type: number
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+    AccountCreateRequest:
+      type: object
+      required: [type, name]
+      properties:
+        type:
+          type: string
+          enum: [CHECKING, SAVINGS]
+        name:
+          type: string
+          maxLength: 80
+    AccountPatchRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          maxLength: 80
+        overdraftEnabled:
+          type: boolean
+    Statement:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        periodStart:
+          type: string
+          format: date
+        periodEnd:
+          type: string
+          format: date
+        generatedAt:
+          type: string
+          format: date-time
+        downloadUrl:
+          type: string
+          format: uri
+
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        accountId:
+          type: string
+          format: uuid
+        type:
+          type: string
+        status:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        occurredAt:
+          type: string
+          format: date-time
+
+    Transfer:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sourceAccountId:
+          type: string
+          format: uuid
+        destination:
+          type: object
+        transferType:
+          type: string
+        status:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    TransferCreateRequest:
+      type: object
+      required: [sourceAccountId, destination, transferType, amount, currency]
+      properties:
+        sourceAccountId:
+          type: string
+          format: uuid
+        destination:
+          type: object
+        transferType:
+          type: string
+          enum: [INTERNAL, ACH, DOMESTIC_WIRE, INTERNATIONAL_WIRE]
+        amount:
+          type: number
+          exclusiveMinimum: 0
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        memo:
+          type: string
+          maxLength: 140
+
+    Card:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [VIRTUAL, PHYSICAL]
+        status:
+          type: string
+        network:
+          type: string
+        last4:
+          type: string
+        nickname:
+          type: string
+    CardIssueRequest:
+      type: object
+      required: [accountId, type]
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [VIRTUAL, PHYSICAL]
+        spendingControls:
+          type: object
+    CardPatchRequest:
+      type: object
+      properties:
+        nickname:
+          type: string
+        spendingControls:
+          type: object
+    CardTransaction:
+      allOf:
+        - $ref: '#/components/schemas/Transaction'
+
+    CryptoAsset:
+      type: object
+      properties:
+        symbol:
+          type: string
+        name:
+          type: string
+        networks:
+          type: array
+          items:
+            type: string
+    CryptoWallet:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        asset:
+          type: string
+        network:
+          type: string
+        balance:
+          type: number
+        status:
+          type: string
+    CryptoDepositAddressRequest:
+      type: object
+      required: [asset, network]
+      properties:
+        asset:
+          type: string
+        network:
+          type: string
+    CryptoDepositAddress:
+      type: object
+      properties:
+        address:
+          type: string
+        asset:
+          type: string
+        network:
+          type: string
+        memoTag:
+          type: string
+    CryptoWithdrawalRequest:
+      type: object
+      required: [asset, network, destinationAddress, amount]
+      properties:
+        asset:
+          type: string
+        network:
+          type: string
+        destinationAddress:
+          type: string
+        amount:
+          type: number
+          exclusiveMinimum: 0
+        travelRule:
+          type: object
+    CryptoWithdrawal:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        asset:
+          type: string
+        network:
+          type: string
+        destinationAddress:
+          type: string
+        amount:
+          type: number
+        status:
+          type: string
+    CryptoTradeQuoteRequest:
+      type: object
+      required: [side, baseAsset, quoteAsset, amount]
+      properties:
+        side:
+          type: string
+          enum: [BUY, SELL]
+        baseAsset:
+          type: string
+        quoteAsset:
+          type: string
+        amount:
+          type: number
+    CryptoTradeQuote:
+      type: object
+      properties:
+        quoteId:
+          type: string
+        side:
+          type: string
+        price:
+          type: number
+        fee:
+          type: number
+        expiresAt:
+          type: string
+          format: date-time
+    CryptoTradeExecuteRequest:
+      type: object
+      required: [quoteId]
+      properties:
+        quoteId:
+          type: string
+    CryptoTrade:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        quoteId:
+          type: string
+        status:
+          type: string
+        executedAt:
+          type: string
+          format: date-time
+
+    InvestmentAccount:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        baseCurrency:
+          type: string
+    InvestmentPosition:
+      type: object
+      properties:
+        symbol:
+          type: string
+        quantity:
+          type: number
+        marketValue:
+          type: number
+        costBasis:
+          type: number
+        unrealizedPnl:
+          type: number
+    InvestmentOrder:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        symbol:
+          type: string
+        side:
+          type: string
+        orderType:
+          type: string
+        quantity:
+          type: number
+        status:
+          type: string
+    InvestmentOrderCreateRequest:
+      type: object
+      required: [accountId, symbol, side, orderType, quantity]
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        symbol:
+          type: string
+        side:
+          type: string
+          enum: [BUY, SELL]
+        orderType:
+          type: string
+          enum: [MARKET, LIMIT, STOP, STOP_LIMIT]
+        quantity:
+          type: number
+          exclusiveMinimum: 0
+        limitPrice:
+          type: number
+        timeInForce:
+          type: string
+          enum: [DAY, GTC]
+
+    Loan:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        productName:
+          type: string
+        status:
+          type: string
+        outstandingBalance:
+          type: number
+        nextPaymentDate:
+          type: string
+          format: date
+    LoanApplicationRequest:
+      type: object
+      required: [productType, requestedAmount]
+      properties:
+        productType:
+          type: string
+        requestedAmount:
+          type: number
+        termMonths:
+          type: integer
+    LoanApplication:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        requestedAmount:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+    LoanScheduleItem:
+      type: object
+      properties:
+        dueDate:
+          type: string
+          format: date
+        principal:
+          type: number
+        interest:
+          type: number
+        total:
+          type: number
+        status:
+          type: string
+    LoanPaymentQuoteRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount:
+          type: number
+          exclusiveMinimum: 0
+        paymentDate:
+          type: string
+          format: date
+    LoanPaymentQuote:
+      type: object
+      properties:
+        amount:
+          type: number
+        principalComponent:
+          type: number
+        interestComponent:
+          type: number
+        fees:
+          type: number
+        validUntil:
+          type: string
+          format: date-time
+
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+        channel:
+          type: string
+        title:
+          type: string
+        message:
+          type: string
+        isRead:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+    NotificationPreferences:
+      type: object
+      properties:
+        emailEnabled:
+          type: boolean
+        smsEnabled:
+          type: boolean
+        pushEnabled:
+          type: boolean
+        transactionAlerts:
+          type: boolean
+        securityAlerts:
+          type: boolean
+        marketingEmails:
+          type: boolean
+        loginAlerts:
+          type: boolean
+        balanceAlerts:
+          type: boolean
+        transferAlerts:
+          type: boolean
+    NotificationPreferencesPatchRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        emailEnabled:
+          type: boolean
+        smsEnabled:
+          type: boolean
+        pushEnabled:
+          type: boolean
+        transactionAlerts:
+          type: boolean
+        securityAlerts:
+          type: boolean
+        marketingEmails:
+          type: boolean
+        loginAlerts:
+          type: boolean
+        balanceAlerts:
+          type: boolean
+        transferAlerts:
+          type: boolean
+
+    AdminUserSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        status:
+          type: string
+        kycStatus:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    AdminPatchUserStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+        reason:
+          type: string
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        eventCode:
+          type: string
+        action:
+          type: string
+        resourceType:
+          type: string
+        resourceId:
+          type: string
+        actor:
+          type: string
+        severity:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    DemoModeState:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        expiresAt:
+          type: string
+          format: date-time
+        scenario:
+          type: string
+    DemoModeEnableRequest:
+      type: object
+      required: [scenario, durationMinutes]
+      properties:
+        scenario:
+          type: string
+        durationMinutes:
+          type: integer
+          minimum: 10
+          maximum: 10080
+
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded, down]
+        checks:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              status:
+                type: string
+              latencyMs:
+                type: integer
+
+    Settings:
+      type: object
+      properties:
+        locale:
+          type: string
+        timezone:
+          type: string
+        currency:
+          type: string
+        theme:
+          type: string
+        featureFlags:
+          type: object
+          additionalProperties:
+            type: boolean
+    SettingsPatchRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        locale:
+          type: string
+        timezone:
+          type: string
+        currency:
+          type: string
+        theme:
+          type: string
+
+    OAuthProvider:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        authorizationUrl:
+          type: string
+          format: uri
+        enabled:
+          type: boolean

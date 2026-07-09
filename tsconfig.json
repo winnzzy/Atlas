@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {
+      "@atlas/ui": ["./packages/ui/src"],
+      "@atlas/ui/*": ["./packages/ui/src/*"],
+      "@atlas/shared": ["./packages/shared/src"],
+      "@atlas/shared/*": ["./packages/shared/src/*"],
+      "@atlas/api-client": ["./packages/api-client/src"],
+      "@atlas/api-client/*": ["./packages/api-client/src/*"],
+      "@atlas/config": ["./packages/config/src"],
+      "@atlas/config/*": ["./packages/config/src/*"],
+      "@atlas/types": ["./packages/types/src"],
+      "@atlas/types/*": ["./packages/types/src/*"]
+    }
+  },
+  "exclude": ["node_modules", "dist", "build", ".next", "coverage"]
+}

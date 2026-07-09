@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx"
+  },
+  "include": [
+    "src/**/*.stories.tsx",
+    "src/**/*.test.tsx",
+    "src/**/*.test.ts",
+    "src/global.d.ts"
+  ]
+}
