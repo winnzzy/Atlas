@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
-import React from 'react';
-import { ProfileSecurityView, mockCustomerProfileGateway } from '@/features/customer-profile';
+import { redirect } from 'next/navigation';
 
 export const metadata: Metadata = {
   title: 'Atlas Profile Security',
@@ -8,6 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default async function ProfileSecurityPage() {
-  const security = await mockCustomerProfileGateway.getSecurity();
-  return <ProfileSecurityView security={security} />;
+  redirect('/dashboard/profile/security');
 }

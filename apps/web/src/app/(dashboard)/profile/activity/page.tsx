@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
-import React from 'react';
-import { ProfileActivityView, mockCustomerProfileGateway } from '@/features/customer-profile';
+import { redirect } from 'next/navigation';
 
 export const metadata: Metadata = {
   title: 'Atlas Profile Activity',
@@ -8,10 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default async function ProfileActivityPage() {
-  const [activity, profile] = await Promise.all([
-    mockCustomerProfileGateway.getActivity(),
-    mockCustomerProfileGateway.getProfile(),
-  ]);
-
-  return <ProfileActivityView activity={activity} profile={profile} />;
+  redirect('/dashboard/profile/activity');
 }

@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
-import React from 'react';
-import { ProfilePreferencesView, mockCustomerProfileGateway } from '@/features/customer-profile';
+import { redirect } from 'next/navigation';
 
 export const metadata: Metadata = {
   title: 'Atlas Profile Preferences',
@@ -8,6 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default async function ProfilePreferencesPage() {
-  const preferences = await mockCustomerProfileGateway.getPreferences();
-  return <ProfilePreferencesView preferences={preferences} />;
+  redirect('/dashboard/profile/preferences');
 }

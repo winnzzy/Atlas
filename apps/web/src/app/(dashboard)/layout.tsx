@@ -19,10 +19,11 @@ const mockUser = {
 export default function DashboardLayout({ children }: { readonly children: React.ReactNode }) {
   const pathname = usePathname();
   const activeHref = React.useMemo(() => {
-    if (pathname.startsWith('/profile/preferences')) return '/profile/preferences';
-    if (pathname.startsWith('/profile/security')) return '/profile/security';
-    if (pathname.startsWith('/profile/activity')) return '/profile/activity';
-    if (pathname.startsWith('/profile')) return '/profile';
+    if (pathname.startsWith('/dashboard/profile/preferences'))
+      return '/dashboard/profile/preferences';
+    if (pathname.startsWith('/dashboard/profile/security')) return '/dashboard/profile/security';
+    if (pathname.startsWith('/dashboard/profile/activity')) return '/dashboard/profile/activity';
+    if (pathname.startsWith('/dashboard/profile')) return '/dashboard/profile';
     return pathname;
   }, [pathname]);
 

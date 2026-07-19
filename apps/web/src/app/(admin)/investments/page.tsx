@@ -1,184 +1,206 @@
 'use client';
 
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle, Badge } from '@atlas/ui';
-import { StatCard } from '@atlas/banking-ui';
-import { TrendingUp, TrendingDown, DollarSign, PieChart, BarChart3, Users } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { Badge, Button, Input } from '@atlas/ui';
+import { Search } from 'lucide-react';
+import { adminApi } from '@/features/admin/api';
+import { AdminPage } from '@/features/admin/components/admin-page';
+import { DataTable, type DataTableColumn } from '@/features/admin/components/data-table';
+import { DetailDrawer } from '@/features/admin/components/detail-drawer';
+import { QueryState } from '@/features/admin/components/query-state';
+import { useDebouncedValue } from '@/features/admin/hooks/use-debounced-value';
 
-const mockInvestments = [
-  {
-    id: '1',
-    asset: 'S&P 500 ETF',
-    ticker: 'VOO',
-    type: 'etf',
-    totalHeld: 125000,
-    totalValueUsd: 56250000,
-    holders: 3420,
-    change24h: 1.2,
-  },
-  {
-    id: '2',
-    asset: 'NASDAQ 100',
-    ticker: 'QQQ',
-    type: 'etf',
-    totalHeld: 89000,
-    totalValueUsd: 42720000,
-    holders: 2180,
-    change24h: 1.8,
-  },
-  {
-    id: '3',
-    asset: 'US Treasury Bond',
-    ticker: 'TLT',
-    type: 'bond',
-    totalHeld: 200000,
-    totalValueUsd: 18400000,
-    holders: 1560,
-    change24h: -0.3,
-  },
-  {
-    id: '4',
-    asset: 'Apple Inc',
-    ticker: 'AAPL',
-    type: 'stock',
-    totalHeld: 45000,
-    totalValueUsd: 8505000,
-    holders: 4210,
-    change24h: 2.1,
-  },
-  {
-    id: '5',
-    asset: 'Microsoft',
-    ticker: 'MSFT',
-    type: 'stock',
-    totalHeld: 32000,
-    totalValueUsd: 13440000,
-    holders: 3890,
-    change24h: 0.9,
-  },
-  {
-    id: '6',
-    asset: 'Vanguard Bond',
-    ticker: 'BND',
-    type: 'bond',
-    totalHeld: 180000,
-    totalValueUsd: 13860000,
-    holders: 980,
-    change24h: 0.1,
-  },
-];
-
-const typeColor: Record<string, string> = {
-  etf: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-  stock: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
-  bond: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+type InvestmentRow = {
+  readonly customerId: string;
+  readonly profileId: string;
+  readonly riskLevel: string;
+  readonly kycStatus: string;
+  readonly portfolioValue: number;
+  readonly positionsCount: number;
+  readonly cashBalance: number;
+  readonly currencies: string;
+  readonly raw: {
+    readonly profile: Record<string, unknown>;
+    readonly portfolio: Record<string, unknown>;
+    readonly wallets: Array<Record<string, unknown>>;
+    readonly pricing: Record<string, unknown>;
+    readonly approvals: Array<Record<string, unknown>>;
+  };
 };
 
-export default function InvestmentsPage() {
-  const totalAum = mockInvestments.reduce((sum, i) => sum + i.totalValueUsd, 0);
-  const totalHolders = mockInvestments.reduce((sum, i) => sum + i.holders, 0);
-  const etfs = mockInvestments.filter((i) => i.type === 'etf').length;
-  const stocks = mockInvestments.filter((i) => i.type === 'stock').length;
+export default function InvestmentsPage(): React.JSX.Element {
+  const [search, setSearch] = React.useState('');
+  const [selected, setSelected] = React.useState<InvestmentRow | null>(null);
+  const debouncedSearch = useDebouncedValue(search, 350);
+
+  const investmentsQuery = useQuery({
+    queryKey: ['admin', 'investments-table', debouncedSearch],
+    queryFn: async () => {
+      const customers = await adminApi.getCustomers({ q: debouncedSearch, limit: 20, offset: 0 });
+      const rows = await Promise.all(
+        customers.items.map(async (customer) => {
+          const [customerInvestments, portfolio, wallets] = await Promise.all([
+            adminApi.getCustomerInvestments(customer.id),
+            adminApi.getPortfolio(customer.id),
+            adminApi.listWallets({ userId: customer.id }),
+          ]);
+
+          const investmentItems = Array.isArray(customerInvestments)
+            ? (customerInvestments as Array<Record<string, unknown>>)
+            : [];
+          const profileData = (investmentItems[0] ?? {}) as Record<string, unknown>;
+          const portfolioData = portfolio as Record<string, unknown>;
+          const walletItems = Array.isArray(wallets)
+            ? (wallets as Array<Record<string, unknown>>)
+            : [];
+
+          return {
+            customerId: customer.id,
+            profileId: String(profileData['id'] ?? customer.id),
+            riskLevel: String(profileData['riskLevel'] ?? 'UNKNOWN'),
+            kycStatus: String(profileData['kycStatus'] ?? 'UNKNOWN'),
+            portfolioValue: Number(portfolioData['totalValue'] ?? 0),
+            positionsCount: Array.isArray(portfolioData['positions'])
+              ? portfolioData['positions'].length
+              : 0,
+            cashBalance: Number(portfolioData['cashBalance'] ?? 0),
+            currencies: Array.from(
+              new Set(
+                walletItems.map((wallet) => String(wallet['currency'] ?? '')).filter(Boolean),
+              ),
+            ).join(', '),
+            raw: {
+              profile: profileData,
+              portfolio: portfolioData,
+              wallets: walletItems,
+              pricing: {},
+              approvals: investmentItems,
+            },
+          } satisfies InvestmentRow;
+        }),
+      );
+
+      return rows;
+    },
+    retry: 2,
+  });
+
+  const columns: Array<DataTableColumn<InvestmentRow>> = [
+    {
+      id: 'customerId',
+      label: 'Customer',
+      sortable: true,
+      accessor: (row) => row.customerId,
+      render: (row) => (
+        <button
+          type="button"
+          className="font-medium text-[var(--color-text-primary)]"
+          onClick={() => setSelected(row)}
+        >
+          {row.customerId}
+        </button>
+      ),
+    },
+    {
+      id: 'riskLevel',
+      label: 'Risk',
+      sortable: true,
+      accessor: (row) => row.riskLevel,
+      render: (row) => row.riskLevel,
+    },
+    {
+      id: 'kycStatus',
+      label: 'KYC',
+      sortable: true,
+      accessor: (row) => row.kycStatus,
+      render: (row) => (
+        <Badge variant={row.kycStatus === 'APPROVED' ? 'success' : 'warning'}>
+          {row.kycStatus}
+        </Badge>
+      ),
+    },
+    {
+      id: 'portfolioValue',
+      label: 'Portfolio',
+      sortable: true,
+      accessor: (row) => row.portfolioValue,
+      render: (row) => row.portfolioValue.toLocaleString(),
+    },
+    {
+      id: 'positionsCount',
+      label: 'Positions',
+      sortable: true,
+      accessor: (row) => row.positionsCount,
+      render: (row) => String(row.positionsCount),
+    },
+    {
+      id: 'cashBalance',
+      label: 'Cash',
+      sortable: true,
+      accessor: (row) => row.cashBalance,
+      render: (row) => row.cashBalance.toLocaleString(),
+    },
+    {
+      id: 'currencies',
+      label: 'Wallet Currencies',
+      accessor: (row) => row.currencies,
+      render: (row) => row.currencies || '-',
+    },
+    {
+      id: 'actions',
+      label: 'Actions',
+      align: 'right',
+      render: (row) => (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            void adminApi.applyInvestmentAction({ customerId: row.customerId, action: 'APPROVE' });
+          }}
+        >
+          Approve
+        </Button>
+      ),
+    },
+  ];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--color-text-primary)]">
-          Investment Management
-        </h1>
-        <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-          Monitor investment products and holdings
-        </p>
-      </div>
+    <AdminPage
+      title="Investments"
+      description="Investment profile, portfolio, wallet, and approval operations"
+      actions={
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-[var(--color-text-tertiary)]" />
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="h-9 w-72 pl-8 text-xs"
+            placeholder="Search by customer"
+          />
+        </div>
+      }
+    >
+      <QueryState
+        isLoading={investmentsQuery.isLoading}
+        isError={investmentsQuery.isError}
+        onRetry={() => void investmentsQuery.refetch()}
+      >
+        <DataTable rows={investmentsQuery.data ?? []} columns={columns} pageSize={20} />
+      </QueryState>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Total AUM"
-          value={`$${(totalAum / 1_000_000).toFixed(1)}M`}
-          trend="up"
-          trendValue="12.4%"
-          icon={<DollarSign className="h-5 w-5" />}
-        />
-        <StatCard
-          title="Total Investors"
-          value={totalHolders.toLocaleString()}
-          icon={<Users className="h-5 w-5" />}
-        />
-        <StatCard title="ETFs" value={etfs.toString()} icon={<PieChart className="h-5 w-5" />} />
-        <StatCard
-          title="Stocks"
-          value={stocks.toString()}
-          icon={<BarChart3 className="h-5 w-5" />}
-        />
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Investment Products</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--color-border)]">
-                  <th className="pb-3 text-left font-medium text-[var(--color-text-secondary)]">
-                    Asset
-                  </th>
-                  <th className="pb-3 text-left font-medium text-[var(--color-text-secondary)]">
-                    Ticker
-                  </th>
-                  <th className="pb-3 text-left font-medium text-[var(--color-text-secondary)]">
-                    Type
-                  </th>
-                  <th className="pb-3 text-right font-medium text-[var(--color-text-secondary)]">
-                    24h Change
-                  </th>
-                  <th className="pb-3 text-right font-medium text-[var(--color-text-secondary)]">
-                    Total Value
-                  </th>
-                  <th className="pb-3 text-right font-medium text-[var(--color-text-secondary)]">
-                    Holders
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {mockInvestments.map((inv) => (
-                  <tr key={inv.id} className="border-b border-[var(--color-border)] last:border-0">
-                    <td className="py-3 font-medium text-[var(--color-text-primary)]">
-                      {inv.asset}
-                    </td>
-                    <td className="py-3">
-                      <Badge variant="outline">{inv.ticker}</Badge>
-                    </td>
-                    <td className="py-3">
-                      <Badge className={typeColor[inv.type]}>{inv.type}</Badge>
-                    </td>
-                    <td
-                      className={`py-3 text-right font-medium ${inv.change24h >= 0 ? 'text-emerald-600' : 'text-red-600'}`}
-                    >
-                      <span className="inline-flex items-center gap-1">
-                        {inv.change24h >= 0 ? (
-                          <TrendingUp className="h-3 w-3" />
-                        ) : (
-                          <TrendingDown className="h-3 w-3" />
-                        )}
-                        {inv.change24h >= 0 ? '+' : ''}
-                        {inv.change24h}%
-                      </span>
-                    </td>
-                    <td className="py-3 text-right font-medium text-[var(--color-text-primary)]">
-                      ${(inv.totalValueUsd / 1_000_000).toFixed(1)}M
-                    </td>
-                    <td className="py-3 text-right text-[var(--color-text-primary)]">
-                      {inv.holders.toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+      <DetailDrawer
+        open={Boolean(selected)}
+        title="Investment Details"
+        onClose={() => setSelected(null)}
+        sections={[
+          { title: 'Profile', value: selected?.raw.profile ?? {} },
+          { title: 'Portfolio', value: selected?.raw.portfolio ?? {} },
+          { title: 'Wallets', value: selected?.raw.wallets ?? [] },
+          { title: 'Approvals', value: selected?.raw.approvals ?? [] },
+          { title: 'Pricing Catalog', value: selected?.raw.pricing ?? {} },
+        ]}
+      />
+    </AdminPage>
   );
 }

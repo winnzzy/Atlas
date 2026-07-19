@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
-import React from 'react';
-import { ProfileOverviewView, mockCustomerProfileGateway } from '@/features/customer-profile';
+import { redirect } from 'next/navigation';
 
 export const metadata: Metadata = {
   title: 'Atlas Customer Profile',
@@ -8,10 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default async function ProfilePage() {
-  const [profile, security] = await Promise.all([
-    mockCustomerProfileGateway.getProfile(),
-    mockCustomerProfileGateway.getSecurity(),
-  ]);
-
-  return <ProfileOverviewView profile={profile} security={security} />;
+  redirect('/dashboard/profile');
 }

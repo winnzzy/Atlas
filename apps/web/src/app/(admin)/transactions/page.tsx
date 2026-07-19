@@ -1,201 +1,170 @@
 'use client';
 
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle, Badge, Input } from '@atlas/ui';
-import { AmountDisplay, StatCard } from '@atlas/banking-ui';
-import {
-  ArrowLeftRight,
-  Search,
-  CheckCircle,
-  Clock,
-  XCircle,
-  RotateCcw,
-  Loader2,
-} from 'lucide-react';
-import { mockTransactions } from '@/features/admin/fixtures';
+import { useQuery } from '@tanstack/react-query';
+import { Badge, Button, Input } from '@atlas/ui';
+import { Search } from 'lucide-react';
+import { adminApi } from '@/features/admin/api';
+import { AdminPage } from '@/features/admin/components/admin-page';
+import { DataTable, type DataTableColumn } from '@/features/admin/components/data-table';
+import { DetailDrawer } from '@/features/admin/components/detail-drawer';
+import { QueryState } from '@/features/admin/components/query-state';
+import { useAdminMutation, useAdminTransactions } from '@/features/admin/hooks';
+import { useDebouncedValue } from '@/features/admin/hooks/use-debounced-value';
+import type { TransactionSearchResult } from '@/features/admin/types';
 
-const statusColor: Record<string, string> = {
-  completed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
-  pending: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
-  failed: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-  reversed: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
-  processing: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-};
+type TransactionRow = TransactionSearchResult['items'][number];
 
-const statusIcon: Record<string, React.ReactNode> = {
-  completed: <CheckCircle className="h-3.5 w-3.5" />,
-  pending: <Clock className="h-3.5 w-3.5" />,
-  failed: <XCircle className="h-3.5 w-3.5" />,
-  reversed: <RotateCcw className="h-3.5 w-3.5" />,
-  processing: <Loader2 className="h-3.5 w-3.5 animate-spin" />,
-};
+export default function TransactionsPage(): React.JSX.Element {
+  const [referenceInput, setReferenceInput] = React.useState('');
+  const [statusInput, setStatusInput] = React.useState('');
+  const [typeInput, setTypeInput] = React.useState('');
+  const [selected, setSelected] = React.useState<TransactionRow | null>(null);
+  const [ledgerAccountId, setLedgerAccountId] = React.useState('');
 
-export default function TransactionsPage() {
-  const [search, setSearch] = React.useState('');
-  const [statusFilter, setStatusFilter] = React.useState<string>('all');
+  const reference = useDebouncedValue(referenceInput, 350);
+  const status = useDebouncedValue(statusInput, 350);
+  const type = useDebouncedValue(typeInput, 350);
 
-  const filtered = React.useMemo(() => {
-    return mockTransactions.filter((t) => {
-      const matchSearch =
-        !search ||
-        `${t.customerName} ${t.description} ${t.reference}`
-          .toLowerCase()
-          .includes(search.toLowerCase());
-      const matchStatus = statusFilter === 'all' || t.status === statusFilter;
-      return matchSearch && matchStatus;
-    });
-  }, [search, statusFilter]);
+  const transactionQuery = useAdminTransactions({ reference, status, type, limit: 100 });
+  const lookupQuery = useQuery({
+    queryKey: ['admin', 'transaction-reference', reference],
+    queryFn: () => adminApi.getTransactionByReference(reference),
+    enabled: reference.length > 2,
+    retry: 2,
+  });
+  const ledgerQuery = useQuery({
+    queryKey: ['admin', 'ledger-view', ledgerAccountId],
+    queryFn: () => adminApi.getLedgerView(ledgerAccountId),
+    enabled: ledgerAccountId.length > 0,
+    retry: 2,
+  });
+  const { reverseTransaction } = useAdminMutation();
 
-  const totalVolume = mockTransactions.reduce((sum, t) => sum + Math.abs(t.amount), 0);
-  const completedCount = mockTransactions.filter((t) => t.status === 'completed').length;
-  const pendingCount = mockTransactions.filter(
-    (t) => t.status === 'pending' || t.status === 'processing',
-  ).length;
-  const failedCount = mockTransactions.filter((t) => t.status === 'failed').length;
+  const columns: Array<DataTableColumn<TransactionRow>> = [
+    {
+      id: 'reference',
+      label: 'Reference',
+      sortable: true,
+      accessor: (row) => row.reference,
+      render: (row) => (
+        <button
+          type="button"
+          className="font-mono text-[11px] text-[var(--color-text-primary)]"
+          onClick={() => setSelected(row)}
+        >
+          {row.reference}
+        </button>
+      ),
+    },
+    {
+      id: 'type',
+      label: 'Type',
+      sortable: true,
+      accessor: (row) => row.type,
+      render: (row) => row.type,
+    },
+    {
+      id: 'status',
+      label: 'Status',
+      sortable: true,
+      accessor: (row) => row.status,
+      render: (row) => (
+        <Badge variant={row.status === 'COMPLETED' ? 'success' : 'warning'}>{row.status}</Badge>
+      ),
+    },
+    {
+      id: 'accountId',
+      label: 'Account',
+      sortable: true,
+      accessor: (row) => row.accountId,
+      render: (row) => row.accountId,
+    },
+    {
+      id: 'amount',
+      label: 'Amount',
+      sortable: true,
+      accessor: (row) => Number(row.amount),
+      render: (row) => `${row.amount} ${row.currency}`,
+    },
+    {
+      id: 'createdAt',
+      label: 'Created',
+      sortable: true,
+      accessor: (row) => new Date(row.createdAt).getTime(),
+      render: (row) => new Date(row.createdAt).toLocaleString(),
+    },
+    {
+      id: 'actions',
+      label: 'Actions',
+      align: 'right',
+      render: (row) => (
+        <div className="inline-flex items-center gap-1">
+          <Button size="sm" variant="outline" onClick={() => setLedgerAccountId(row.accountId)}>
+            Ledger
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              reverseTransaction.mutate({ transactionId: row.id, reason: 'admin reversal' })
+            }
+          >
+            Reverse
+          </Button>
+        </div>
+      ),
+    },
+  ];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--color-text-primary)]">
-          Transaction Monitoring
-        </h1>
-        <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-          Real-time transaction feed and monitoring
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Total Volume"
-          value={`$${(totalVolume / 1_000).toFixed(0)}K`}
-          icon={<ArrowLeftRight className="h-5 w-5" />}
-        />
-        <StatCard
-          title="Completed"
-          value={completedCount.toString()}
-          trend="up"
-          trendValue="12%"
-          icon={<CheckCircle className="h-5 w-5" />}
-        />
-        <StatCard
-          title="Pending"
-          value={pendingCount.toString()}
-          icon={<Clock className="h-5 w-5" />}
-        />
-        <StatCard
-          title="Failed"
-          value={failedCount.toString()}
-          icon={<XCircle className="h-5 w-5" />}
-        />
-      </div>
-
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle>All Transactions</CardTitle>
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-tertiary)]" />
-                <Input
-                  placeholder="Search transactions..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-9 w-64"
-                />
-              </div>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="rounded-md border border-input bg-background px-3 py-2 text-sm"
-              >
-                <option value="all">All Status</option>
-                <option value="completed">Completed</option>
-                <option value="pending">Pending</option>
-                <option value="processing">Processing</option>
-                <option value="failed">Failed</option>
-                <option value="reversed">Reversed</option>
-              </select>
-            </div>
+    <AdminPage
+      title="Transactions"
+      description="Search, reference lookup, and ledger-linked transaction controls"
+      actions={
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-[var(--color-text-tertiary)]" />
+            <Input
+              value={referenceInput}
+              onChange={(event) => setReferenceInput(event.target.value)}
+              className="h-9 w-72 pl-8 text-xs"
+              placeholder="Reference lookup"
+            />
           </div>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--color-border)]">
-                  <th className="pb-3 text-left font-medium text-[var(--color-text-secondary)]">
-                    Date
-                  </th>
-                  <th className="pb-3 text-left font-medium text-[var(--color-text-secondary)]">
-                    Customer
-                  </th>
-                  <th className="pb-3 text-left font-medium text-[var(--color-text-secondary)]">
-                    Type
-                  </th>
-                  <th className="pb-3 text-left font-medium text-[var(--color-text-secondary)]">
-                    Description
-                  </th>
-                  <th className="pb-3 text-left font-medium text-[var(--color-text-secondary)]">
-                    Counterparty
-                  </th>
-                  <th className="pb-3 text-left font-medium text-[var(--color-text-secondary)]">
-                    Status
-                  </th>
-                  <th className="pb-3 text-left font-medium text-[var(--color-text-secondary)]">
-                    Reference
-                  </th>
-                  <th className="pb-3 text-right font-medium text-[var(--color-text-secondary)]">
-                    Amount
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((t) => (
-                  <tr
-                    key={t.id}
-                    className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-surface)] transition-colors"
-                  >
-                    <td className="py-3 text-[var(--color-text-secondary)] whitespace-nowrap">
-                      {new Date(t.createdAt).toLocaleDateString()}
-                    </td>
-                    <td className="py-3 font-medium text-[var(--color-text-primary)]">
-                      {t.customerName}
-                    </td>
-                    <td className="py-3">
-                      <Badge variant="outline" className="capitalize">
-                        {t.type.replace(/_/g, ' ')}
-                      </Badge>
-                    </td>
-                    <td className="py-3 text-[var(--color-text-primary)] max-w-[200px] truncate">
-                      {t.description}
-                    </td>
-                    <td className="py-3 text-[var(--color-text-secondary)]">{t.counterparty}</td>
-                    <td className="py-3">
-                      <span
-                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${statusColor[t.status]}`}
-                      >
-                        {statusIcon[t.status]}
-                        {t.status}
-                      </span>
-                    </td>
-                    <td className="py-3 text-xs font-mono text-[var(--color-text-tertiary)]">
-                      {t.reference}
-                    </td>
-                    <td className="py-3 text-right">
-                      <AmountDisplay
-                        money={{ amount: t.amount, currency: 'USD' }}
-                        size="sm"
-                        showSign
-                        colorize
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+          <Input
+            value={statusInput}
+            onChange={(event) => setStatusInput(event.target.value)}
+            className="h-9 w-32 text-xs"
+            placeholder="Status"
+          />
+          <Input
+            value={typeInput}
+            onChange={(event) => setTypeInput(event.target.value)}
+            className="h-9 w-40 text-xs"
+            placeholder="Type"
+          />
+        </div>
+      }
+    >
+      <QueryState
+        isLoading={transactionQuery.isLoading}
+        isError={transactionQuery.isError}
+        onRetry={() => void transactionQuery.refetch()}
+      >
+        <DataTable rows={transactionQuery.data?.items ?? []} columns={columns} pageSize={20} />
+      </QueryState>
+
+      <DetailDrawer
+        open={Boolean(selected)}
+        title="Transaction Details"
+        onClose={() => setSelected(null)}
+        sections={[
+          { title: 'Transaction', value: selected ?? {} },
+          { title: 'Reference Lookup', value: lookupQuery.data ?? {} },
+          { title: 'Ledger View', value: ledgerQuery.data ?? [] },
+        ]}
+      />
+    </AdminPage>
   );
 }

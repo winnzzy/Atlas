@@ -1,131 +1,183 @@
 'use client';
 
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle, Badge, Input } from '@atlas/ui';
-import { StatCard } from '@atlas/banking-ui';
-import { CreditCard, Search, Snowflake, CheckCircle } from 'lucide-react';
-import { mockCards } from '@/features/admin/fixtures';
+import { useQuery } from '@tanstack/react-query';
+import { Badge, Button, Input } from '@atlas/ui';
+import { Search } from 'lucide-react';
+import { adminApi } from '@/features/admin/api';
+import { AdminPage } from '@/features/admin/components/admin-page';
+import { DataTable, type DataTableColumn } from '@/features/admin/components/data-table';
+import { DetailDrawer } from '@/features/admin/components/detail-drawer';
+import { QueryState } from '@/features/admin/components/query-state';
+import { useAdminMutation } from '@/features/admin/hooks';
+import { useDebouncedValue } from '@/features/admin/hooks/use-debounced-value';
 
-const statusColor: Record<string, string> = {
-  active: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
-  frozen: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-  expired: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
-  cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+type CardRow = {
+  readonly id: string;
+  readonly holderId: string;
+  readonly masked: string;
+  readonly type: string;
+  readonly network: string;
+  readonly status: string;
+  readonly isDemo: boolean;
+  readonly raw: Record<string, unknown>;
 };
 
-const brandColor: Record<string, string> = {
-  visa: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-  mastercard: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
-  amex: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400',
-};
-
-export default function CardsPage() {
+export default function CardsPage(): React.JSX.Element {
   const [search, setSearch] = React.useState('');
+  const [selected, setSelected] = React.useState<CardRow | null>(null);
+  const [revealResult, setRevealResult] = React.useState<Record<string, unknown> | null>(null);
+  const debouncedSearch = useDebouncedValue(search, 350);
+  const { applyCardAction } = useAdminMutation();
 
-  const filtered = React.useMemo(() => {
-    if (!search) return mockCards;
-    return mockCards.filter((c) =>
-      `${c.customerName} ${c.last4} ${c.brand}`.toLowerCase().includes(search.toLowerCase()),
-    );
-  }, [search]);
+  const cardsQuery = useQuery({
+    queryKey: ['admin', 'cards-table', debouncedSearch],
+    queryFn: async () => {
+      const customers = await adminApi.getCustomers({ q: debouncedSearch, limit: 20, offset: 0 });
+      const cardLists = await Promise.all(
+        customers.items.map(async (customer) => {
+          const cards = await adminApi.getCustomerCards(customer.id);
+          return cards.map((item) => ({
+            id: String(item['id']),
+            holderId: customer.id,
+            masked: `****${String(item['lastFour'] ?? '----')}`,
+            type: String(item['type'] ?? 'UNKNOWN'),
+            network: String(item['network'] ?? 'UNKNOWN'),
+            status: String(item['status'] ?? 'UNKNOWN'),
+            isDemo: Boolean(item['isDemo'] ?? false),
+            raw: item,
+          }));
+        }),
+      );
 
-  const activeCards = mockCards.filter((c) => c.status === 'active').length;
-  const frozenCards = mockCards.filter((c) => c.status === 'frozen').length;
-  const totalSpent = mockCards.reduce((sum, c) => sum + c.spent, 0);
+      return cardLists.flat();
+    },
+    retry: 2,
+  });
+
+  const columns: Array<DataTableColumn<CardRow>> = [
+    {
+      id: 'card',
+      label: 'Card',
+      sortable: true,
+      accessor: (row) => row.masked,
+      render: (row) => (
+        <button
+          type="button"
+          className="font-medium text-[var(--color-text-primary)]"
+          onClick={() => setSelected(row)}
+        >
+          {row.masked}
+        </button>
+      ),
+    },
+    {
+      id: 'type',
+      label: 'Type',
+      sortable: true,
+      accessor: (row) => row.type,
+      render: (row) => row.type,
+    },
+    {
+      id: 'network',
+      label: 'Network',
+      sortable: true,
+      accessor: (row) => row.network,
+      render: (row) => row.network,
+    },
+    {
+      id: 'status',
+      label: 'Status',
+      sortable: true,
+      accessor: (row) => row.status,
+      render: (row) => (
+        <Badge variant={row.status === 'ACTIVE' ? 'success' : 'warning'}>{row.status}</Badge>
+      ),
+    },
+    {
+      id: 'holder',
+      label: 'Holder',
+      accessor: (row) => row.holderId,
+      render: (row) => row.holderId,
+    },
+    {
+      id: 'actions',
+      label: 'Actions',
+      align: 'right',
+      render: (row) => (
+        <div className="inline-flex items-center gap-1">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => applyCardAction.mutate({ cardId: row.id, action: 'FREEZE' })}
+          >
+            Freeze
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => applyCardAction.mutate({ cardId: row.id, action: 'REPLACE' })}
+          >
+            Replace
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => applyCardAction.mutate({ cardId: row.id, action: 'CANCEL' })}
+          >
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!row.isDemo}
+            onClick={() => {
+              if (!row.isDemo) return;
+              applyCardAction
+                .mutateAsync({ cardId: row.id, action: 'REVEAL_PAN' })
+                .then((result) => setRevealResult(result as Record<string, unknown>));
+            }}
+          >
+            Reveal PAN
+          </Button>
+        </div>
+      ),
+    },
+  ];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--color-text-primary)]">
-          Card Management
-        </h1>
-        <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-          Manage physical and virtual cards
-        </p>
-      </div>
+    <AdminPage
+      title="Cards"
+      description="Card issuance lifecycle controls and risk operations"
+      actions={
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-[var(--color-text-tertiary)]" />
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="h-9 w-72 pl-8 text-xs"
+            placeholder="Search by customer"
+          />
+        </div>
+      }
+    >
+      <QueryState
+        isLoading={cardsQuery.isLoading}
+        isError={cardsQuery.isError}
+        onRetry={() => void cardsQuery.refetch()}
+      >
+        <DataTable rows={cardsQuery.data ?? []} columns={columns} pageSize={20} />
+      </QueryState>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Total Cards"
-          value={mockCards.length.toString()}
-          icon={<CreditCard className="h-5 w-5" />}
-        />
-        <StatCard
-          title="Active"
-          value={activeCards.toString()}
-          icon={<CheckCircle className="h-5 w-5" />}
-        />
-        <StatCard
-          title="Frozen"
-          value={frozenCards.toString()}
-          icon={<Snowflake className="h-5 w-5" />}
-        />
-        <StatCard
-          title="Total Spent"
-          value={`$${(totalSpent / 1_000).toFixed(1)}K`}
-          trend="up"
-          trendValue="8.3%"
-          icon={<CreditCard className="h-5 w-5" />}
-        />
-      </div>
-
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <CardTitle>All Cards</CardTitle>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-tertiary)]" />
-              <Input
-                placeholder="Search cards..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 w-64"
-              />
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((c) => (
-              <div
-                key={c.id}
-                className="rounded-xl border border-[var(--color-border)] bg-gradient-to-br from-slate-800 to-slate-900 p-5 text-white shadow-lg"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs uppercase tracking-wider opacity-70">
-                    Atlas {c.type === 'virtual' ? 'Virtual' : ''} Card
-                  </span>
-                  <Badge className={brandColor[c.brand]}>{c.brand}</Badge>
-                </div>
-                <p className="mt-6 font-mono text-lg tracking-widest">•••• •••• •••• {c.last4}</p>
-                <div className="mt-4 flex items-center justify-between text-sm">
-                  <div>
-                    <p className="opacity-70 text-xs">Cardholder</p>
-                    <p className="font-medium">{c.customerName}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="opacity-70 text-xs">Expires</p>
-                    <p className="font-medium">
-                      {new Date(c.expiresAt).toLocaleDateString('en-US', {
-                        month: '2-digit',
-                        year: '2-digit',
-                      })}
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-4 flex items-center justify-between">
-                  <Badge className={statusColor[c.status]}>{c.status}</Badge>
-                  <div className="text-right text-xs opacity-70">
-                    <p>
-                      ${c.spent.toLocaleString()} / ${c.limit.toLocaleString()} spent
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+      <DetailDrawer
+        open={Boolean(selected)}
+        title="Card Details"
+        onClose={() => setSelected(null)}
+        sections={[
+          { title: 'Card', value: selected?.raw ?? {} },
+          { title: 'Reveal Result', value: revealResult ?? {} },
+        ]}
+      />
+    </AdminPage>
   );
 }
