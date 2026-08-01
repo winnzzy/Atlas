@@ -11,17 +11,12 @@ import {
   type CommandItem,
 } from '@atlas/ui';
 import { AdminGlobalSearch } from '@/features/admin/components/global-search';
-
-const currentAdmin = {
-  id: 'admin-1',
-  name: 'Sarah Mitchell',
-  email: 'sarah.mitchell@atlasbank.com',
-  initials: 'SM',
-};
+import { useAuth } from '@/components/providers/auth-provider';
 
 export default function AdminLayout({ children }: { readonly children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { user, logout } = useAuth();
 
   const activeHref = React.useMemo(() => {
     const segments = pathname.split('/').filter(Boolean);
@@ -96,11 +91,26 @@ export default function AdminLayout({ children }: { readonly children: React.Rea
     [],
   );
 
+  const profileItems = React.useMemo(
+    () => [
+      ...defaultProfileMenuItems,
+      {
+        id: 'logout',
+        label: 'Sign out',
+        variant: 'danger' as const,
+        onClick: () => {
+          void logout();
+        },
+      },
+    ],
+    [logout],
+  );
+
   return (
     <AdminShell
       sidebarConfig={defaultAdminSidebarConfig}
-      user={currentAdmin}
-      profileItems={defaultProfileMenuItems}
+      user={user ? { name: `${user.firstName} ${user.lastName}`, email: user.email, initials: user.initials, role: user.role } : undefined}
+      profileItems={profileItems}
       breadcrumbs={breadcrumbs}
       commands={commands}
       activeHref={activeHref}

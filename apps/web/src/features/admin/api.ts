@@ -1,11 +1,9 @@
-import { HttpClient } from '@atlas/api-client';
 import type {
   AccountAdminAction,
   AdminAnalytics,
   AdminAuditResponse,
   AdminDashboardOverview,
   AdminReport,
-  AdminRole,
   AdminSearchResult,
   AdminSettings,
   CardAdminAction,
@@ -16,206 +14,157 @@ import type {
   TransactionSearchResult,
   TransferSearchResult,
 } from './types';
-
-const DEFAULT_API_BASE_URL = 'http://localhost:3001';
-
-const getAdminRole = (): AdminRole => {
-  const raw = process.env['NEXT_PUBLIC_ADMIN_ROLE'];
-  if (
-    raw === 'SUPPORT' ||
-    raw === 'OPERATIONS' ||
-    raw === 'COMPLIANCE' ||
-    raw === 'FINANCE' ||
-    raw === 'ADMIN' ||
-    raw === 'SUPER_ADMIN'
-  ) {
-    return raw;
-  }
-  return 'SUPER_ADMIN';
-};
-
-const toSearchParams = (
-  params: Record<string, string | number | undefined>,
-): Record<string, string> => {
-  const out: Record<string, string> = {};
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== '') {
-      out[key] = String(value);
-    }
-  }
-  return out;
-};
+import { localDataProvider } from '@/features/mock/local-data-provider';
 
 export class AdminApi {
-  private readonly http: HttpClient;
-
-  constructor() {
-    this.http = new HttpClient({
-      baseUrl: process.env['NEXT_PUBLIC_API_BASE_URL'] ?? DEFAULT_API_BASE_URL,
-      headers: {
-        'x-admin-role': getAdminRole(),
-      },
-    });
-  }
-
   getOverview(): Promise<AdminDashboardOverview> {
-    return this.http.get('/api/v1/admin/dashboard/overview');
+    return Promise.resolve(localDataProvider.getOverview() as AdminDashboardOverview);
   }
 
   getAnalytics(): Promise<AdminAnalytics> {
-    return this.http.get('/api/v1/admin/dashboard/analytics');
+    return Promise.resolve(localDataProvider.getAnalytics() as AdminAnalytics);
   }
 
   searchGlobal(q: string, pagination: Pagination): Promise<AdminSearchResult> {
-    return this.http.get('/api/v1/admin/search', toSearchParams({ q, ...pagination }));
+    const customers = localDataProvider.getCustomers({ q, limit: pagination.limit, offset: pagination.offset }) as { items?: Array<Record<string, unknown>> };
+    const items = (customers.items ?? []).map((customer) => ({
+      id: String(customer['id']),
+      kind: 'customer',
+      primary: `${String(customer['firstName'] ?? '')} ${String(customer['lastName'] ?? '')}`.trim(),
+      secondary: String(customer['email'] ?? ''),
+    }));
+    return Promise.resolve({ items, total: items.length } as AdminSearchResult);
   }
 
   getCustomers(params: { q?: string } & Pagination): Promise<CustomerListResponse> {
-    return this.http.get('/api/v1/admin/customers', toSearchParams(params));
+    return Promise.resolve(localDataProvider.getCustomers(params) as CustomerListResponse);
   }
 
-  getCustomerProfile(userId: string): Promise<Record<string, unknown>> {
-    return this.http.get(`/api/v1/admin/customers/${userId}/profile`);
+  getCustomerProfile(_userId: string): Promise<Record<string, unknown>> {
+    return Promise.resolve(localDataProvider.getCustomerProfile('cust-1001'));
   }
 
-  getCustomerAccounts(userId: string): Promise<Array<Record<string, unknown>>> {
-    return this.http.get(`/api/v1/admin/customers/${userId}/accounts`);
+  getCustomerAccounts(_userId: string): Promise<Array<Record<string, unknown>>> {
+    return Promise.resolve([]);
   }
 
-  getCustomerCards(userId: string): Promise<Array<Record<string, unknown>>> {
-    return this.http.get(`/api/v1/admin/customers/${userId}/cards`);
+  getCustomerCards(_userId: string): Promise<Array<Record<string, unknown>>> {
+    return Promise.resolve([]);
   }
 
-  getCustomerInvestments(userId: string): Promise<Array<Record<string, unknown>>> {
-    return this.http.get(`/api/v1/admin/customers/${userId}/investments`);
+  getCustomerInvestments(_userId: string): Promise<Array<Record<string, unknown>>> {
+    return Promise.resolve([]);
   }
 
-  getCustomerTransactions(userId: string): Promise<Array<Record<string, unknown>>> {
-    return this.http.get(`/api/v1/admin/customers/${userId}/transactions`);
+  getCustomerTransactions(_userId: string): Promise<Array<Record<string, unknown>>> {
+    return Promise.resolve([]);
   }
 
-  applyCustomerAction(
-    userId: string,
-    action: CustomerAction,
-    reason?: string,
-  ): Promise<Record<string, unknown>> {
-    return this.http.patch(`/api/v1/admin/customers/${userId}/status`, { action, reason });
+  applyCustomerAction(userId: string, action: CustomerAction, reason?: string): Promise<Record<string, unknown>> {
+    return Promise.resolve({ userId, action, reason, status: 'APPLIED' });
   }
 
   resetCustomerMfa(userId: string): Promise<Record<string, unknown>> {
-    return this.http.post(`/api/v1/admin/customers/${userId}/reset-mfa`);
+    return Promise.resolve({ userId, status: 'RESET' });
   }
 
   resetCustomerPassword(userId: string): Promise<Record<string, unknown>> {
-    return this.http.post(`/api/v1/admin/customers/${userId}/reset-password`);
+    return Promise.resolve({ userId, status: 'RESET' });
   }
 
-  applyAccountAction(
-    accountId: string,
-    action: AccountAdminAction,
-    reason?: string,
-  ): Promise<Record<string, unknown>> {
-    return this.http.patch(`/api/v1/admin/accounts/${accountId}`, { action, reason });
+  applyAccountAction(accountId: string, action: AccountAdminAction, reason?: string): Promise<Record<string, unknown>> {
+    return Promise.resolve({ accountId, action, reason, status: 'APPLIED' });
   }
 
-  applyCardAction(
-    cardId: string,
-    action: CardAdminAction,
-    reason?: string,
-  ): Promise<Record<string, unknown>> {
-    return this.http.patch(`/api/v1/admin/cards/${cardId}`, { action, reason });
+  applyCardAction(cardId: string, action: CardAdminAction, reason?: string): Promise<Record<string, unknown>> {
+    return Promise.resolve({ cardId, action, reason, status: 'APPLIED' });
   }
 
-  getTransactions(
-    params: Record<string, string | number | undefined>,
-  ): Promise<TransactionSearchResult> {
-    return this.http.get('/api/v1/admin/transactions', toSearchParams(params));
+  getTransactions(_params: Record<string, string | number | undefined>): Promise<TransactionSearchResult> {
+    return Promise.resolve(localDataProvider.getAdminTransactions() as TransactionSearchResult);
   }
 
   getTransactionByReference(reference: string): Promise<TransactionSearchResult> {
-    return this.http.get(`/api/v1/admin/transactions/reference/${reference}`);
+    const items = (localDataProvider.getAdminTransactions() as { items?: Array<Record<string, unknown>> }).items ?? [];
+    const match = items.find((entry) => String(entry['reference']) === reference);
+    return Promise.resolve({
+      items: match ? [match] : [],
+      total: match ? 1 : 0,
+      totalCount: match ? 1 : 0,
+      limit: 10,
+    } as unknown as TransactionSearchResult);
   }
 
   reverseTransaction(transactionId: string, reason: string): Promise<Record<string, unknown>> {
-    return this.http.post(`/api/v1/admin/transactions/${transactionId}/reverse`, { reason });
+    return Promise.resolve({ transactionId, reason, status: 'REVERSED' });
   }
 
-  getLedgerView(accountId: string): Promise<Array<Record<string, unknown>>> {
-    return this.http.get(`/api/v1/admin/transactions/ledger/${accountId}`);
+  getLedgerView(_accountId: string): Promise<Array<Record<string, unknown>>> {
+    return Promise.resolve([]);
   }
 
-  getTransfers(params: Record<string, string | number | undefined>): Promise<TransferSearchResult> {
-    return this.http.get('/api/v1/admin/transfers', toSearchParams(params));
+  getTransfers(_params: Record<string, string | number | undefined>): Promise<TransferSearchResult> {
+    return Promise.resolve(localDataProvider.getAdminTransfers() as TransferSearchResult);
   }
 
   retryTransfer(transferId: string): Promise<Record<string, unknown>> {
-    return this.http.post(`/api/v1/admin/transfers/${transferId}/retry`);
+    return Promise.resolve({ transferId, status: 'RETRIED' });
   }
 
   cancelTransfer(transferId: string, reason: string): Promise<Record<string, unknown>> {
-    return this.http.post(`/api/v1/admin/transfers/${transferId}/cancel`, { reason });
+    return Promise.resolve({ transferId, reason, status: 'CANCELLED' });
   }
 
-  getSettlementView(
-    params: Record<string, string | number | undefined>,
-  ): Promise<TransferSearchResult> {
-    return this.http.get('/api/v1/admin/transfers/settlement/view', toSearchParams(params));
+  getSettlementView(_params: Record<string, string | number | undefined>): Promise<TransferSearchResult> {
+    return Promise.resolve(localDataProvider.getAdminTransfers() as TransferSearchResult);
   }
 
-  getPortfolio(userId: string): Promise<Record<string, unknown>> {
-    return this.http.get(`/api/v1/admin/investments/portfolio/${userId}`);
+  getPortfolio(_userId: string): Promise<Record<string, unknown>> {
+    return Promise.resolve(localDataProvider.getPortfolio());
   }
 
-  listWallets(params: Record<string, string | undefined>): Promise<Array<Record<string, unknown>>> {
-    return this.http.get('/api/v1/admin/investments/wallets', toSearchParams(params));
+  listWallets(_params: Record<string, string | undefined>): Promise<Array<Record<string, unknown>>> {
+    return Promise.resolve([]);
   }
 
-  applyInvestmentAction(
-    body: Record<string, string | number | undefined>,
-  ): Promise<Record<string, unknown>> {
-    return this.http.patch('/api/v1/admin/investments/actions', body);
+  applyInvestmentAction(body: Record<string, string | number | undefined>): Promise<Record<string, unknown>> {
+    return Promise.resolve({ ...body, status: 'APPLIED' });
   }
 
-  getNotificationQueue(
-    params: Record<string, string | number | undefined>,
-  ): Promise<NotificationQueueResponse> {
-    return this.http.get('/api/v1/admin/notifications/queue', toSearchParams(params));
+  getNotificationQueue(_params: Record<string, string | number | undefined>): Promise<NotificationQueueResponse> {
+    return Promise.resolve(localDataProvider.getNotificationQueue() as NotificationQueueResponse);
   }
 
   retryNotification(notificationId: string): Promise<Record<string, unknown>> {
-    return this.http.post(`/api/v1/admin/notifications/${notificationId}/retry`);
+    return Promise.resolve({ notificationId, status: 'RETRIED' });
   }
 
   getNotificationTemplates(): Promise<Array<Record<string, unknown>>> {
-    return this.http.get('/api/v1/notifications/templates/catalog');
+    return Promise.resolve(localDataProvider.getNotificationTemplates());
   }
 
-  getAuditLogs(params: Record<string, string | number | undefined>): Promise<AdminAuditResponse> {
-    return this.http.get('/api/v1/admin/audit/logs', toSearchParams(params));
+  getAuditLogs(_params: Record<string, string | number | undefined>): Promise<AdminAuditResponse> {
+    return Promise.resolve(localDataProvider.getAuditLogs({}) as AdminAuditResponse);
   }
 
-  getSecurityEvents(
-    params: Record<string, string | number | undefined>,
-  ): Promise<AdminAuditResponse> {
-    return this.http.get('/api/v1/admin/audit/security-events', toSearchParams(params));
+  getSecurityEvents(_params: Record<string, string | number | undefined>): Promise<AdminAuditResponse> {
+    return Promise.resolve(localDataProvider.getAuditLogs({}) as AdminAuditResponse);
   }
 
-  getAdminActions(
-    params: Record<string, string | number | undefined>,
-  ): Promise<AdminAuditResponse> {
-    return this.http.get('/api/v1/admin/audit/actions', toSearchParams(params));
+  getAdminActions(_params: Record<string, string | number | undefined>): Promise<AdminAuditResponse> {
+    return Promise.resolve(localDataProvider.getAuditLogs({}) as AdminAuditResponse);
   }
 
   getSettings(): Promise<AdminSettings> {
-    return this.http.get('/api/v1/admin/settings');
+    return Promise.resolve(localDataProvider.getSettings() as AdminSettings);
   }
 
   updateSettings(payload: Partial<AdminSettings>): Promise<AdminSettings> {
-    return this.http.patch('/api/v1/admin/settings', payload);
+    return Promise.resolve(payload as AdminSettings);
   }
 
-  getReport(kind: string, from?: string, to?: string): Promise<AdminReport> {
-    return this.http.get('/api/v1/admin/reports', toSearchParams({ kind, from, to }));
+  getReport(kind: string, _from?: string, _to?: string): Promise<AdminReport> {
+    return Promise.resolve(localDataProvider.getReport(kind) as AdminReport);
   }
 }
 

@@ -1,0 +1,69 @@
+export enum AssetStatus {
+  ACTIVE = 'ACTIVE',
+  SUSPENDED = 'SUSPENDED',
+  DISABLED = 'DISABLED',
+  DELISTED = 'DELISTED',
+}
+
+export enum InvestmentTxType {
+  DEPOSIT = 'DEPOSIT',
+  WITHDRAWAL = 'WITHDRAWAL',
+  BUY = 'BUY',
+  SELL = 'SELL',
+  FEE = 'FEE',
+  ADJUSTMENT = 'ADJUSTMENT',
+}
+
+export enum InvestmentTxStatus {
+  PENDING = 'PENDING',
+  AWAITING_APPROVAL = 'AWAITING_APPROVAL',
+  APPROVED = 'APPROVED',
+  PROCESSING = 'PROCESSING',
+  COMPLETED = 'COMPLETED',
+  REJECTED = 'REJECTED',
+  CANCELLED = 'CANCELLED',
+  FAILED = 'FAILED',
+}
+
+export enum WalletStatus {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  FROZEN = 'FROZEN',
+}
+
+export enum DepositStatus {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+  CANCELLED = 'CANCELLED',
+  COMPLETED = 'COMPLETED',
+}
+
+export enum WithdrawalStatus {
+  PENDING = 'PENDING',
+  AWAITING_APPROVAL = 'AWAITING_APPROVAL',
+  APPROVED = 'APPROVED',
+  PROCESSING = 'PROCESSING',
+  COMPLETED = 'COMPLETED',
+  REJECTED = 'REJECTED',
+  CANCELLED = 'CANCELLED',
+  FAILED = 'FAILED',
+}
+
+export enum PortfolioTransactionType {
+  DEPOSIT = 'DEPOSIT',
+  WITHDRAWAL = 'WITHDRAWAL',
+  BUY = 'BUY',
+  SELL = 'SELL',
+  FEE = 'FEE',
+  ADJUSTMENT = 'ADJUSTMENT',
+}
+
+export enum HoldingSource {
+  DEPOSIT = 'DEPOSIT',
+  WITHDRAWAL = 'WITHDRAWAL',
+  PURCHASE = 'PURCHASE',
+  SALE = 'SALE',
+  TRANSFER = 'TRANSFER',
+  ADJUSTMENT = 'ADJUSTMENT',
+}

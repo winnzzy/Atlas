@@ -1,23 +1,19 @@
 'use client';
 
 import React from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   DashboardShell,
   PageContainer,
   defaultDashboardSidebarConfig,
   defaultProfileMenuItems,
 } from '@atlas/ui';
-
-const mockUser = {
-  id: '1',
-  name: 'Jordan Parker',
-  email: 'jordan.parker@atlasbank.com',
-  initials: 'JP',
-};
+import { useAuth } from '@/components/providers/auth-provider';
 
 export default function DashboardLayout({ children }: { readonly children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, logout } = useAuth();
   const activeHref = React.useMemo(() => {
     if (pathname.startsWith('/dashboard/profile/preferences'))
       return '/dashboard/profile/preferences';
@@ -27,15 +23,30 @@ export default function DashboardLayout({ children }: { readonly children: React
     return pathname;
   }, [pathname]);
 
+  const profileItems = React.useMemo(
+    () => [
+      ...defaultProfileMenuItems,
+      {
+        id: 'logout',
+        label: 'Sign out',
+        variant: 'danger' as const,
+        onClick: () => {
+          void logout();
+        },
+      },
+    ],
+    [logout],
+  );
+
   return (
     <DashboardShell
       sidebarConfig={defaultDashboardSidebarConfig}
-      user={mockUser}
-      profileItems={defaultProfileMenuItems}
+      user={user ? { name: `${user.firstName} ${user.lastName}`, email: user.email, initials: user.initials, role: user.role } : undefined}
+      profileItems={profileItems}
       activeHref={activeHref}
       environment="development"
       onNavigate={(href) => {
-        window.location.href = href;
+        router.push(href);
       }}
     >
       <PageContainer>{children}</PageContainer>

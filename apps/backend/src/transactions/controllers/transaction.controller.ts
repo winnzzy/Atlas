@@ -1,0 +1,190 @@
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  Query,
+  HttpCode,
+  HttpStatus,
+  Logger,
+  Inject,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+  ApiQuery,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
+import { TransactionService } from '../services/transaction.service';
+import type { CreateTransactionDto } from '../dto/create-transaction.dto';
+import type { SearchTransactionsDto, StatementExportDto } from '../dto/search-transactions.dto';
+import { TransactionResponseDto, TransactionSearchResponseDto, StatementResponseDto } from '../dto/transaction-response.dto';
+
+@ApiTags('Transactions')
+@ApiBearerAuth()
+@Controller('transactions')
+export class TransactionController {
+  private readonly logger = new Logger(TransactionController.name);
+
+  constructor(@Inject(TransactionService) private readonly transactionService: TransactionService) {}
+
+  /**
+   * Create a new transaction.
+   * Orchestrates: Authorization → Policy Validation → Business Validation →
+   *               Idempotency Check → Ledger Posting → Audit → Events
+   */
+  @Post()
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Create a new transaction',
+    description:
+      'Creates a new financial transaction. The transaction will be validated, authorized, posted to the ledger, settled, and completed automatically. All accounting is delegated to the Ledger Engine.',
+  })
+  @ApiResponse({
+    status: HttpStatus.CREATED,
+    description: 'Transaction created and processed successfully',
+    type: TransactionResponseDto,
+  })
+  @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'Validation error' })
+  @ApiResponse({ status: HttpStatus.CONFLICT, description: 'Duplicate reference or idempotency key' })
+  @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Policy violation' })
+  async createTransaction(@Body() dto: CreateTransactionDto): Promise<TransactionResponseDto> {
+    return this.transactionService.createTransaction(dto);
+  }
+
+  /**
+   * Search transactions with cursor-based pagination.
+   */
+  @Get()
+  @ApiOperation({
+    summary: 'Search transactions',
+    description:
+      'Search transactions by reference, date range, amount, status, type, account, customer, or currency. Supports cursor-based pagination for efficient large dataset handling.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Transaction search results',
+    type: TransactionSearchResponseDto,
+  })
+  async searchTransactions(@Query() dto: SearchTransactionsDto): Promise<TransactionSearchResponseDto> {
+    return this.transactionService.searchTransactions(dto);
+  }
+
+  /**
+   * Get a transaction by ID.
+   */
+  @Get(':id')
+  @ApiOperation({
+    summary: 'Get transaction by ID',
+    description: 'Retrieve a single transaction by its unique identifier.',
+  })
+  @ApiParam({ name: 'id', description: 'Transaction ID (UUID)' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Transaction found',
+    type: TransactionResponseDto,
+  })
+  @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'Transaction not found' })
+  async getTransaction(@Param('id') id: string): Promise<TransactionResponseDto> {
+    return this.transactionService.getTransaction(id);
+  }
+
+  /**
+   * Cancel a transaction.
+   */
+  @Delete(':id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Cancel a transaction',
+    description:
+      'Cancel a transaction that has not yet reached a terminal state. If the transaction was already posted to the ledger, the journal will be reversed.',
+  })
+  @ApiParam({ name: 'id', description: 'Transaction ID (UUID)' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Transaction cancelled',
+    type: TransactionResponseDto,
+  })
+  @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'Transaction not found' })
+  @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'Transaction cannot be cancelled in current status' })
+  async cancelTransaction(
+    @Param('id') id: string,
+    @Body('reason') reason: string,
+  ): Promise<TransactionResponseDto> {
+    return this.transactionService.cancelTransaction(id, reason);
+  }
+
+  /**
+   * Reverse a settled/completed transaction.
+   */
+  @Put(':id/reverse')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Reverse a transaction',
+    description:
+      'Reverse a posted, settled, or completed transaction. Creates a reversing journal entry in the Ledger Engine.',
+  })
+  @ApiParam({ name: 'id', description: 'Transaction ID (UUID)' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Transaction reversed',
+    type: TransactionResponseDto,
+  })
+  @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'Transaction not found' })
+  @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'Transaction is not reversible' })
+  async reverseTransaction(
+    @Param('id') id: string,
+    @Body('reason') reason: string,
+  ): Promise<TransactionResponseDto> {
+    return this.transactionService.reverseTransaction(id, reason);
+  }
+
+  /**
+   * Get transactions for a specific account.
+   */
+  @Get('account/:accountId')
+  @ApiOperation({
+    summary: 'Get account transactions',
+    description: 'Retrieve all transactions for a specific account with cursor-based pagination.',
+  })
+  @ApiParam({ name: 'accountId', description: 'Account ID' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Number of results per page (max 200)' })
+  @ApiQuery({ name: 'cursor', required: false, description: 'Cursor for pagination' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Account transactions',
+    type: TransactionSearchResponseDto,
+  })
+  async getAccountTransactions(
+    @Param('accountId') accountId: string,
+    @Query('limit') limit?: number,
+    @Query('cursor') cursor?: string,
+  ): Promise<TransactionSearchResponseDto> {
+    return this.transactionService.getAccountTransactions(accountId, limit, cursor);
+  }
+
+  /**
+   * Generate an account statement.
+   * Export placeholder only - no PDF generation.
+   */
+  @Post('statement')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Generate account statement',
+    description:
+      'Generate a transaction statement for an account within a date range. Returns structured data for export (PDF generation is not included).',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Statement generated',
+    type: StatementResponseDto,
+  })
+  async generateStatement(@Body() dto: StatementExportDto): Promise<StatementResponseDto> {
+    return this.transactionService.generateStatement(dto);
+  }
+}

@@ -1,4 +1,3 @@
-import { HttpClient, ProfileApiClient } from '@atlas/api-client';
 import type {
   CustomerPreferences,
   CustomerProfile,
@@ -8,179 +7,150 @@ import type {
   UpdateCustomerProfileInput,
   UpdateCustomerSecurityInput,
 } from '@atlas/types';
-
-const DEFAULT_API_BASE_URL = 'http://localhost:3001';
-
-const toSearchParams = (
-  params: Record<string, string | number | undefined>,
-): Record<string, string> => {
-  const out: Record<string, string> = {};
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== '') {
-      out[key] = String(value);
-    }
-  }
-  return out;
-};
+import { localDataProvider } from '@/features/mock/local-data-provider';
 
 export class CustomerApi {
-  private readonly http: HttpClient;
-  private readonly profile: ProfileApiClient;
-
-  constructor() {
-    this.http = new HttpClient({
-      baseUrl: process.env['NEXT_PUBLIC_API_BASE_URL'] ?? DEFAULT_API_BASE_URL,
-    });
-    this.profile = new ProfileApiClient(this.http);
+  getAccounts(_params: Record<string, string | number | undefined>): Promise<Record<string, unknown>> {
+    return Promise.resolve(localDataProvider.getAccounts({}));
   }
 
-  getAccounts(
-    params: Record<string, string | number | undefined>,
-  ): Promise<Record<string, unknown>> {
-    return this.http.get('/api/v1/accounts', toSearchParams(params));
-  }
-
-  getAccount(id: string): Promise<Record<string, unknown>> {
-    return this.http.get(`/api/v1/accounts/${id}`);
+  getAccount(_id: string): Promise<Record<string, unknown>> {
+    return Promise.resolve(localDataProvider.getAccount('acct-1001'));
   }
 
   getAccountStatements(
-    id: string,
-    params: Record<string, string | number | undefined>,
+    _id: string,
+    _params: Record<string, string | number | undefined>,
   ): Promise<Record<string, unknown>> {
-    return this.http.get(`/api/v1/accounts/${id}/statements`, toSearchParams(params));
+    return Promise.resolve(localDataProvider.getAccountStatements('acct-1001'));
   }
 
-  getAccountHolds(id: string): Promise<Array<Record<string, unknown>>> {
-    return this.http.get(`/api/v1/accounts/${id}/holds`);
+  getAccountHolds(_id: string): Promise<Array<Record<string, unknown>>> {
+    return Promise.resolve([]);
   }
 
-  getTransactions(
-    params: Record<string, string | number | undefined>,
-  ): Promise<Record<string, unknown>> {
-    return this.http.get('/api/v1/transactions', toSearchParams(params));
+  getTransactions(_params: Record<string, string | number | undefined>): Promise<Record<string, unknown>> {
+    return Promise.resolve(localDataProvider.getTransactions({}));
   }
 
   getAccountTransactions(
     accountId: string,
     params: Record<string, string | number | undefined>,
   ): Promise<Record<string, unknown>> {
-    return this.http.get(`/api/v1/transactions/account/${accountId}`, toSearchParams(params));
+    const result = localDataProvider.getTransactions(params) as { items?: Array<Record<string, unknown>> };
+    const items = (result.items ?? []).filter((entry) => String(entry['accountId']) === accountId);
+    return Promise.resolve({ items, total: items.length });
   }
 
-  reverseTransaction(id: string, reason: string): Promise<Record<string, unknown>> {
-    return this.http.put(`/api/v1/transactions/${id}/reverse`, { reason });
+  reverseTransaction(id: string, _reason: string): Promise<Record<string, unknown>> {
+    return Promise.resolve({ id, status: 'REVERSED' });
   }
 
-  getTransfers(
-    params: Record<string, string | number | undefined>,
-  ): Promise<Record<string, unknown>> {
-    return this.http.get('/api/v1/transfers', toSearchParams(params));
+  getTransfers(_params: Record<string, string | number | undefined>): Promise<Record<string, unknown>> {
+    return Promise.resolve(localDataProvider.getTransfers({}));
   }
 
   getTransfer(id: string): Promise<Record<string, unknown>> {
-    return this.http.get(`/api/v1/transfers/${id}`);
+    const transfers = localDataProvider.getTransfers({}) as { items?: Array<Record<string, unknown>> };
+    const transfer = (transfers.items ?? []).find((entry) => String(entry['id']) === id);
+    return Promise.resolve(transfer ?? { id, status: 'NOT_FOUND' });
   }
 
   createTransfer(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return this.http.post('/api/v1/transfers', payload);
+    return Promise.resolve(localDataProvider.createTransfer(payload));
   }
 
-  cancelTransfer(id: string, reason: string): Promise<Record<string, unknown>> {
-    return this.http.post(`/api/v1/transfers/${id}/cancel`, { reason });
+  cancelTransfer(id: string, _reason: string): Promise<Record<string, unknown>> {
+    return Promise.resolve(localDataProvider.cancelTransfer(id));
   }
 
-  getBeneficiaries(
-    params: Record<string, string | number | undefined>,
-  ): Promise<Record<string, unknown>> {
-    return this.http.get('/api/v1/transfers/beneficiaries', toSearchParams(params));
+  getBeneficiaries(_params: Record<string, string | number | undefined>): Promise<Record<string, unknown>> {
+    return Promise.resolve({ items: [], total: 0, page: 1, limit: 10 });
   }
 
-  getCards(params: Record<string, string | number | undefined>): Promise<Record<string, unknown>> {
-    return this.http.get('/api/v1/cards', toSearchParams(params));
+  getCards(_params: Record<string, string | number | undefined>): Promise<Record<string, unknown>> {
+    return Promise.resolve(localDataProvider.getCards({}));
   }
 
   getCard(id: string): Promise<Record<string, unknown>> {
-    return this.http.get(`/api/v1/cards/${id}`);
+    const cards = localDataProvider.getCards({}) as { items?: Array<Record<string, unknown>> };
+    const card = (cards.items ?? []).find((entry) => String(entry['id']) === id);
+    return Promise.resolve(card ?? { id, status: 'NOT_FOUND' });
   }
 
-  freezeCard(id: string, reason?: string): Promise<Record<string, unknown>> {
-    return this.http.post(`/api/v1/cards/${id}/freeze`, reason ? { reason } : undefined);
+  freezeCard(id: string, _reason?: string): Promise<Record<string, unknown>> {
+    return Promise.resolve(localDataProvider.freezeCard(id));
   }
 
   unfreezeCard(id: string): Promise<Record<string, unknown>> {
-    return this.http.post(`/api/v1/cards/${id}/unfreeze`);
+    return Promise.resolve(localDataProvider.unfreezeCard(id));
   }
 
   getCardTransactions(
-    id: string,
-    params: Record<string, string | number | undefined>,
+    _id: string,
+    _params: Record<string, string | number | undefined>,
   ): Promise<Record<string, unknown>> {
-    return this.http.get(`/api/v1/cards/${id}/transactions`, toSearchParams(params));
+    return Promise.resolve({ items: [], total: 0, page: 1, limit: 10 });
   }
 
   getPortfolio(): Promise<Record<string, unknown>> {
-    return this.http.get('/api/v1/investments/portfolio');
+    return Promise.resolve(localDataProvider.getPortfolio());
   }
 
-  getPortfolioTransactions(
-    params: Record<string, string | number | undefined>,
-  ): Promise<Array<Record<string, unknown>>> {
-    return this.http.get('/api/v1/investments/portfolio/transactions', toSearchParams(params));
+  getPortfolioTransactions(_params: Record<string, string | number | undefined>): Promise<Array<Record<string, unknown>>> {
+    return Promise.resolve(localDataProvider.getPortfolioTransactions());
   }
 
   getAssets(): Promise<Array<Record<string, unknown>>> {
-    return this.http.get('/api/v1/investments/assets');
+    return Promise.resolve([]);
   }
 
-  getAssetWallets(assetId: string): Promise<Array<Record<string, unknown>>> {
-    return this.http.get(`/api/v1/investments/assets/${assetId}/wallets`);
+  getAssetWallets(_assetId: string): Promise<Array<Record<string, unknown>>> {
+    return Promise.resolve([]);
   }
 
   getDeposits(): Promise<Array<Record<string, unknown>>> {
-    return this.http.get('/api/v1/investments/deposits');
+    return Promise.resolve([]);
   }
 
   getWithdrawals(): Promise<Array<Record<string, unknown>>> {
-    return this.http.get('/api/v1/investments/withdrawals');
+    return Promise.resolve([]);
   }
 
-  getNotifications(
-    params: Record<string, string | number | undefined>,
-  ): Promise<Record<string, unknown>> {
-    return this.http.get('/api/v1/notifications', toSearchParams(params));
+  getNotifications(_params: Record<string, string | number | undefined>): Promise<Record<string, unknown>> {
+    return Promise.resolve(localDataProvider.getNotifications({}));
   }
 
   markNotificationRead(id: string): Promise<Record<string, unknown>> {
-    return this.http.patch(`/api/v1/notifications/${id}/read`);
+    return Promise.resolve(localDataProvider.markNotificationRead(id));
   }
 
   getProfile(): Promise<CustomerProfile> {
-    return this.profile.getProfile();
+    return Promise.resolve(localDataProvider.getProfile() as unknown as CustomerProfile);
   }
 
   updateProfile(payload: UpdateCustomerProfileInput): Promise<CustomerProfile> {
-    return this.profile.updateProfile(payload);
+    return Promise.resolve({ ...(localDataProvider.getProfile() as unknown as CustomerProfile), ...payload } as unknown as CustomerProfile);
   }
 
   getPreferences(): Promise<CustomerPreferences> {
-    return this.profile.getPreferences();
+    return Promise.resolve({} as CustomerPreferences);
   }
 
   updatePreferences(payload: UpdateCustomerPreferencesInput): Promise<CustomerPreferences> {
-    return this.profile.updatePreferences(payload);
+    return Promise.resolve(payload as CustomerPreferences);
   }
 
   getSecurity(): Promise<CustomerSecurity> {
-    return this.profile.getSecurity();
+    return Promise.resolve(localDataProvider.getSecurity() as unknown as CustomerSecurity);
   }
 
   updateSecurity(payload: UpdateCustomerSecurityInput): Promise<CustomerSecurity> {
-    return this.profile.updateSecurity(payload);
+    return Promise.resolve(payload as unknown as CustomerSecurity);
   }
 
   getActivity(): Promise<CustomerProfileActivity> {
-    return this.profile.getActivity();
+    return Promise.resolve({ items: [], total: 0 } as CustomerProfileActivity);
   }
 }
 
