@@ -140,7 +140,7 @@ export function Header({
   return (
     <header
       className={cn(
-        'flex h-16 items-center justify-between border-b border-[var(--color-border-default)] bg-[var(--color-bg-primary)] px-4 lg:px-6',
+        'flex h-16 items-center justify-between border-b border-[var(--color-border-default)] bg-[rgba(255,255,255,0.76)] px-4 backdrop-blur-xl lg:px-6',
         className,
       )}
     >

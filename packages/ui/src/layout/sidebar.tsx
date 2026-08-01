@@ -82,11 +82,11 @@ function SidebarNavItem({
       aria-current={isActive ? 'page' : undefined}
       tabIndex={0}
       className={cn(
-        'group relative flex w-full items-center gap-3 rounded-[var(--radius-md)] px-3 py-2 text-sm font-medium transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)]',
+        'group relative flex w-full items-center gap-3 rounded-[var(--radius-lg)] border border-transparent px-3 py-2.5 text-sm font-medium transition-all duration-[var(--duration-fast)] ease-[var(--ease-default)]',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-sidebar-bg)]',
         isActive
-          ? 'bg-white/10 text-[var(--color-sidebar-text-active)]'
-          : 'text-[var(--color-sidebar-text)] hover:bg-[var(--color-sidebar-hover)] hover:text-[var(--color-sidebar-text-active)]',
+          ? 'border-white/10 bg-[linear-gradient(90deg,rgba(255,255,255,0.16),rgba(255,255,255,0.08))] text-[var(--color-sidebar-text-active)] shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]'
+          : 'text-[var(--color-sidebar-text)] hover:border-white/10 hover:bg-[var(--color-sidebar-hover)] hover:text-[var(--color-sidebar-text-active)]',
         depth > 0 && 'ml-3 pl-6',
         isCollapsed && 'justify-center px-2',
       )}
@@ -262,8 +262,8 @@ export function Sidebar({ config, activeHref, onNavigate, className }: SidebarPr
         role="navigation"
         aria-label={`${config.variant === 'admin' ? 'Admin' : 'Main'} navigation`}
         className={cn(
-          'fixed left-0 top-0 z-[var(--z-sticky)] flex h-screen flex-col bg-[var(--color-sidebar-bg)] transition-all duration-[var(--duration-slow)] ease-[var(--ease-default)]',
-          'border-r border-white/5',
+          'fixed left-0 top-0 z-[var(--z-sticky)] flex h-screen flex-col bg-[var(--color-sidebar-bg)]/95 backdrop-blur-xl transition-all duration-[var(--duration-slow)] ease-[var(--ease-default)]',
+          'border-r border-white/10 shadow-[14px_0_34px_rgba(15,23,42,0.2)]',
           // Mobile
           isMobileOpen ? 'translate-x-0' : '-translate-x-full',
           // Desktop
@@ -275,19 +275,24 @@ export function Sidebar({ config, activeHref, onNavigate, className }: SidebarPr
         {/* Logo / Brand */}
         <div
           className={cn(
-            'flex h-16 items-center border-b border-white/5 px-4',
+            'flex h-16 items-center border-b border-white/10 px-4',
             isCollapsed && 'justify-center',
           )}
         >
           {config.logo ?? (
             <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-primary-600)] text-sm font-bold text-white">
+              <div className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-primary-600)] text-sm font-bold text-white shadow-lg shadow-[var(--color-primary-600)]/25">
                 A
               </div>
               {!isCollapsed && (
-                <span className="text-lg font-bold tracking-tight text-[var(--color-sidebar-text-active)]">
-                  Atlas
-                </span>
+                <div className="flex min-w-0 flex-col">
+                  <span className="text-sm font-semibold tracking-tight text-[var(--color-sidebar-text-active)]">
+                    Atlas
+                  </span>
+                  <span className="text-[11px] text-[var(--color-sidebar-text)]/80">
+                    Enterprise Banking
+                  </span>
+                </div>
               )}
             </div>
           )}

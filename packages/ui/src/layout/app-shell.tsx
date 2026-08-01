@@ -6,6 +6,7 @@ import { SidebarProvider, Sidebar } from './sidebar';
 import { CommandPalette, CommandPaletteProvider } from './command-palette';
 import { NotificationsProvider, NotificationDrawer } from './notification-center';
 import { Header } from './header';
+import { useSidebar } from './hooks';
 import type {
   SidebarConfig,
   BreadcrumbItem,
@@ -90,10 +91,12 @@ function ShellContent({
   activeHref,
   onNavigate,
 }: ShellContentProps) {
+  const { isCollapsed } = useSidebar();
+
   return (
-    <div className="flex h-screen overflow-hidden bg-[var(--color-bg-secondary)]">
+    <div className="flex h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.4),transparent_32%),var(--color-bg-secondary)]">
       <Sidebar config={sidebarConfig} activeHref={activeHref} onNavigate={onNavigate} />
-      <ShellMainContent>
+      <ShellMainContent isCollapsed={isCollapsed}>
         <Header
           breadcrumbs={breadcrumbs}
           user={user}
@@ -113,12 +116,20 @@ function ShellContent({
 
 interface ShellMainContentProps {
   readonly children: React.ReactNode;
+  readonly isCollapsed: boolean;
 }
 
-function ShellMainContent({ children }: ShellMainContentProps) {
+function ShellMainContent({ children, isCollapsed }: ShellMainContentProps) {
   return (
-    <div className="flex flex-1 flex-col overflow-hidden lg:ml-[260px]">
-      <main className="flex-1 overflow-y-auto">{children}</main>
+    <div
+      className={cn(
+        'flex min-w-0 flex-1 flex-col overflow-hidden',
+        isCollapsed ? 'lg:pl-[72px]' : 'lg:pl-[260px]',
+      )}
+    >
+      <main className="flex-1 overflow-y-auto bg-[linear-gradient(180deg,rgba(255,255,255,0.16),transparent_28%)]">
+        <div className="mx-auto flex min-h-full w-full max-w-7xl flex-col">{children}</div>
+      </main>
     </div>
   );
 }
