@@ -1,28 +1,17 @@
 import type { Metadata } from 'next';
-import React from 'react';
-import { ThemeProvider } from '@/components/providers/theme-provider';
-import { QueryProvider } from '@/components/providers/query-provider';
-import { AuthProvider } from '@/components/providers/auth-provider';
 import './globals.css';
+import { AuthProvider } from '@/providers/auth-provider';
 
 export const metadata: Metadata = {
-  title: 'Atlas - Digital Banking',
-  description: 'US-focused digital banking platform with integrated cryptocurrency support',
+  title: 'Atlas Digital Banking',
+  description: 'Simplified Atlas banking demo for Vercel deployment.',
 };
 
-export type RootLayoutProps = {
-  readonly children: React.ReactNode;
-};
-
-export default function RootLayout({ children }: RootLayoutProps) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className="min-h-screen bg-background font-sans antialiased">
-        <ThemeProvider defaultTheme="system">
-          <QueryProvider>
-            <AuthProvider>{children}</AuthProvider>
-          </QueryProvider>
-        </ThemeProvider>
+    <html lang="en">
+      <body>
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

@@ -11,24 +11,14 @@
     "clean": "rm -rf .next"
   },
   "dependencies": {
-    "@atlas/api-client": "workspace:*",
-    "@atlas/banking-ui": "workspace:*",
-    "@atlas/shared": "workspace:*",
-    "@atlas/types": "workspace:*",
-    "@atlas/ui": "workspace:*",
-    "@tanstack/react-query": "^5.60.0",
     "clsx": "^2.1.0",
-    "framer-motion": "^11.0.0",
     "lucide-react": "^0.468.0",
     "next": "^15.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-hook-form": "^7.54.0",
-    "tailwind-merge": "^2.6.0",
-    "zod": "^3.24.0"
+    "tailwind-merge": "^2.6.0"
   },
   "devDependencies": {
-    "@atlas/config": "workspace:*",
     "@tailwindcss/postcss": "^4.0.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
