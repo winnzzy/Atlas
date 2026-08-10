@@ -52,14 +52,12 @@ export function LandingShell() {
           </div>
           <div className="rounded-[28px] border border-slate-200 bg-slate-50/80 p-6">
             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-500">
-              Demo access
+              Development access
             </p>
-            <ul className="mt-4 space-y-3 text-sm text-slate-600">
-              <li>Customer: jordan.parker@atlasbank.com</li>
-              <li>Password: AtlasBank!2026</li>
-              <li>Admin: sarah.mitchell@atlasbank.com</li>
-              <li>Password: AtlasAdmin!2026</li>
-            </ul>
+            <p className="mt-4 text-sm text-slate-600">
+              Demo sign-in is available for local testing and walkthroughs without exposing account
+              credentials on the public landing experience.
+            </p>
           </div>
         </CardContent>
       </Card>

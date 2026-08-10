@@ -10,8 +10,8 @@ import { Input } from '@/components/ui/input';
 
 export default function LoginPage() {
   const { login } = useAuth();
-  const [email, setEmail] = useState('jordan.parker@atlasbank.com');
-  const [password, setPassword] = useState('AtlasBank!2026');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
 
