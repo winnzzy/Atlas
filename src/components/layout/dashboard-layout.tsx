@@ -35,12 +35,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-transparent">
       <PageContainer>
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-5">
           <Header onToggleMobile={() => setMobileOpen((value) => !value)} />
           <MobileNavigation open={mobileOpen} />
           <div className="flex gap-6">
             <Sidebar />
-            <div className="min-w-0 flex-1">{children}</div>
+            <div className="min-w-0 flex-1 space-y-6">{children}</div>
           </div>
         </div>
       </PageContainer>

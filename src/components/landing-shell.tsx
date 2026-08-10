@@ -16,8 +16,8 @@ export function LandingShell() {
   }, []);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,_#f8fbff,_#eef4ff)] px-4">
-      <Card className="w-full max-w-3xl overflow-hidden border-slate-200">
+    <main className="flex min-h-screen items-center justify-center px-4 py-12">
+      <Card variant="elevated" className="w-full max-w-5xl overflow-hidden border-slate-200/80 bg-white/90">
         <CardContent className="grid gap-8 p-8 md:grid-cols-[1.2fr_0.8fr] md:p-10">
           <div className="space-y-6">
             <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-semibold text-slate-700">
@@ -50,7 +50,7 @@ export function LandingShell() {
               </Link>
             ) : null}
           </div>
-          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
+          <div className="rounded-[28px] border border-slate-200 bg-slate-50/80 p-6">
             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-500">
               Demo access
             </p>

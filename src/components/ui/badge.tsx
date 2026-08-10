@@ -7,13 +7,14 @@ export function Badge({
 }: {
   className?: string;
   children: React.ReactNode;
-  variant?: 'default' | 'success' | 'warning' | 'danger';
+  variant?: 'default' | 'success' | 'warning' | 'danger' | 'outline';
 }) {
   const variants = {
     default: 'bg-slate-100 text-slate-700',
     success: 'bg-emerald-50 text-emerald-700',
     warning: 'bg-amber-50 text-amber-700',
     danger: 'bg-rose-50 text-rose-700',
+    outline: 'border border-slate-200 bg-white text-slate-700',
   };
 
   return (
