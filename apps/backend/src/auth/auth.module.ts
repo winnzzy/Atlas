@@ -5,6 +5,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { Injectable } from '@nestjs/common';
 import { TokenService } from './token.service';
 import { PasswordService } from './password.service';
 import { SessionService } from './session.service';
@@ -14,9 +15,11 @@ import { IdentityService } from './identity.service';
 import { DeviceService } from './device.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { PrismaModule } from '../prisma/prisma.module';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @Module({
   imports: [
+    ConfigModule,
     PrismaModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
@@ -38,7 +41,8 @@ import { PrismaModule } from '../prisma/prisma.module';
     IdentityService,
     DeviceService,
     JwtStrategy,
+    JwtAuthGuard,
   ],
-  exports: [AuthService, TokenService],
+  exports: [AuthService, TokenService, JwtAuthGuard],
 })
 export class AuthModule {}

@@ -1,12 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { getPortfolio } from '@/lib/demo-store';
+import { loadDashboardData, type DashboardPortfolioItem } from '@/lib/api-data';
 
 export default function InvestmentsPage() {
-  const [portfolio] = useState(getPortfolio());
+  const [portfolio, setPortfolio] = useState<DashboardPortfolioItem[]>([]);
+
+  useEffect(() => {
+    void loadDashboardData().then(({ portfolio }) => setPortfolio(portfolio));
+  }, []);
 
   return (
     <DashboardLayout>

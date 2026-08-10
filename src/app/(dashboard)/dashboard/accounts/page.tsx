@@ -1,13 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, Tbody, Td, Th, Thead, Tr } from '@/components/ui/table';
-import { getAccounts } from '@/lib/demo-store';
+import { loadDashboardData, type DashboardAccount } from '@/lib/api-data';
 
 export default function AccountsPage() {
-  const [accounts] = useState(getAccounts());
+  const [accounts, setAccounts] = useState<DashboardAccount[]>([]);
+
+  useEffect(() => {
+    void loadDashboardData().then(({ accounts }) => setAccounts(accounts));
+  }, []);
 
   return (
     <DashboardLayout>

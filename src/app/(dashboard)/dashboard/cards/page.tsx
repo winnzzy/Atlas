@@ -1,22 +1,30 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { freezeCard, getCards, unfreezeCard } from '@/lib/demo-store';
+import { loadDashboardData, type DashboardCard } from '@/lib/api-data';
 
 export default function CardsPage() {
-  const [cards, setCards] = useState(getCards());
+  const [cards, setCards] = useState<DashboardCard[]>([]);
+
+  useEffect(() => {
+    void loadDashboardData().then(({ cards }) => setCards(cards));
+  }, []);
 
   const toggleCard = (cardId: string, status: string) => {
-    if (status === 'ACTIVE') {
-      freezeCard(cardId);
-    } else {
-      unfreezeCard(cardId);
-    }
-    setCards(getCards());
+    setCards((currentCards) =>
+      currentCards.map((card) =>
+        card.id === cardId
+          ? {
+              ...card,
+              status: status === 'ACTIVE' ? 'FROZEN' : 'ACTIVE',
+            }
+          : card,
+      ),
+    );
   };
 
   return (

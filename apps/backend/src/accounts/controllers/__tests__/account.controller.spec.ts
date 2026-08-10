@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { AccountController } from '../account.controller';
 import { AccountService } from '../../services/account.service';
@@ -6,6 +7,7 @@ import { AccountRepository } from '../../repositories/account.repository';
 import type { AuthenticatedUser } from '../../policies/account.policy';
 import { AccountResponseDto } from '../../dto/account-response.dto';
 import { Decimal } from '@prisma/client/runtime/library';
+import { JwtAuthGuard } from '../../../auth/guards/jwt-auth.guard';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -78,6 +80,11 @@ describe('AccountController', () => {
 
     controller = module.get(AccountController);
     repository = module.get(AccountRepository);
+  });
+
+  it('should require jwt auth guard for account routes', () => {
+    const guards = Reflect.getMetadata('__guards__', AccountController);
+    expect(guards).toContain(JwtAuthGuard);
   });
 
   // ─── create ──────────────────────────────────────────────────────

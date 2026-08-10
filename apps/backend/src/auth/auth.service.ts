@@ -1,11 +1,11 @@
-import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
-import type { ConfigService } from '@nestjs/config';
+import { Inject, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { Request } from 'express';
-import type { AuditService } from './audit.service';
-import type { DeviceService } from './device.service';
-import type { IdentityService } from './identity.service';
-import type { SessionService } from './session.service';
-import type { TokenService } from './token.service';
+import { AuditService } from './audit.service';
+import { DeviceService } from './device.service';
+import { IdentityService } from './identity.service';
+import { SessionService } from './session.service';
+import { TokenService } from './token.service';
 import type {
   ForgotPasswordDto,
   LoginDto,
@@ -48,12 +48,12 @@ export interface RefreshOutcome {
 @Injectable()
 export class AuthService {
   constructor(
-    private readonly identityService: IdentityService,
-    private readonly tokenService: TokenService,
-    private readonly sessionService: SessionService,
-    private readonly deviceService: DeviceService,
-    private readonly auditService: AuditService,
-    private readonly configService: ConfigService,
+    @Inject(IdentityService) private readonly identityService: IdentityService,
+    @Inject(TokenService) private readonly tokenService: TokenService,
+    @Inject(SessionService) private readonly sessionService: SessionService,
+    @Inject(DeviceService) private readonly deviceService: DeviceService,
+    @Inject(AuditService) private readonly auditService: AuditService,
+    @Inject(ConfigService) private readonly configService: ConfigService,
   ) {}
 
   async register(input: RegisterDto, request: Request): Promise<ApiEnvelope<AuthSessionDto>> {

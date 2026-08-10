@@ -1,5 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
-import type { PrismaService } from '../prisma/prisma.service';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 
 export type AuditAction =
   | 'LOGIN'
@@ -32,7 +32,7 @@ export interface CreateAuditLogDto {
 export class AuditService {
   private readonly logger = new Logger(AuditService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async log(dto: CreateAuditLogDto): Promise<void> {
     if (!dto.userId) {

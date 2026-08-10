@@ -1,14 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, Tbody, Td, Th, Thead, Tr } from '@/components/ui/table';
-import { getTransactions } from '@/lib/demo-store';
+import { loadDashboardData, type DashboardTransaction } from '@/lib/api-data';
 
 export default function TransactionsPage() {
-  const [transactions] = useState(getTransactions());
+  const [transactions, setTransactions] = useState<DashboardTransaction[]>([]);
+
+  useEffect(() => {
+    void loadDashboardData().then(({ transactions }) => setTransactions(transactions));
+  }, []);
 
   return (
     <DashboardLayout>

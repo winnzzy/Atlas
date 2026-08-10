@@ -163,6 +163,17 @@ describe('AccountService', () => {
       expect(result.total).toBe(1);
       expect(result.page).toBe(1);
     });
+
+    it('should ignore null account entries returned by the repository', async () => {
+      repository.findByUserId.mockResolvedValue({
+        accounts: [makeAccount(), null as never],
+        total: 2,
+      });
+
+      const result = await service.listAccounts(USER);
+      expect(result.data).toHaveLength(1);
+      expect(result.total).toBe(2);
+    });
   });
 
   // ─── updateNickname ─────────────────────────────────────────────

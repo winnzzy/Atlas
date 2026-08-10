@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRightLeft,
   Bell,
@@ -16,16 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, Tbody, Td, Th, Thead, Tr } from '@/components/ui/table';
 import { useAuth } from '@/providers/auth-provider';
-import {
-  freezeCard,
-  getAccounts,
-  getCards,
-  getNotifications,
-  getPortfolio,
-  getTransactions,
-  getTransfers,
-  unfreezeCard,
-} from '@/lib/demo-store';
+import { loadDashboardData, type DashboardAccount, type DashboardCard, type DashboardNotification, type DashboardPortfolioItem, type DashboardTransaction, type DashboardTransfer } from '@/lib/api-data';
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('en-US', {
@@ -37,12 +28,23 @@ function formatCurrency(value: number) {
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const [accounts] = useState(getAccounts());
-  const [transactions] = useState(getTransactions());
-  const [transfers] = useState(getTransfers());
-  const [cards, setCards] = useState(getCards());
-  const [notifications, setNotifications] = useState(getNotifications());
-  const [portfolio] = useState(getPortfolio());
+  const [accounts, setAccounts] = useState<DashboardAccount[]>([]);
+  const [transactions, setTransactions] = useState<DashboardTransaction[]>([]);
+  const [transfers, setTransfers] = useState<DashboardTransfer[]>([]);
+  const [cards, setCards] = useState<DashboardCard[]>([]);
+  const [notifications, setNotifications] = useState<DashboardNotification[]>([]);
+  const [portfolio, setPortfolio] = useState<DashboardPortfolioItem[]>([]);
+
+  useEffect(() => {
+    void loadDashboardData().then(({ accounts, transactions, transfers, cards, notifications, portfolio }) => {
+      setAccounts(accounts);
+      setTransactions(transactions);
+      setTransfers(transfers);
+      setCards(cards);
+      setNotifications(notifications);
+      setPortfolio(portfolio);
+    });
+  }, []);
 
   const totals = useMemo(() => {
     const balance = accounts.reduce((sum, account) => sum + account.balance, 0);
@@ -52,18 +54,22 @@ export default function DashboardPage() {
   }, [accounts, transfers]);
 
   const toggleCard = (cardId: string, status: string) => {
-    if (status === 'ACTIVE') {
-      freezeCard(cardId);
-      setCards(getCards());
-      return;
-    }
-    unfreezeCard(cardId);
-    setCards(getCards());
+    setCards((currentCards) =>
+      currentCards.map((card) =>
+        card.id === cardId
+          ? {
+              ...card,
+              status: status === 'ACTIVE' ? 'FROZEN' : 'ACTIVE',
+            }
+          : card,
+      ),
+    );
   };
 
   const markRead = (id: string) => {
-    const updated = notifications.map((item) => (item.id === id ? { ...item, read: true } : item));
-    setNotifications(updated);
+    setNotifications((currentNotifications) =>
+      currentNotifications.map((item) => (item.id === id ? { ...item, read: true } : item)),
+    );
   };
 
   return (

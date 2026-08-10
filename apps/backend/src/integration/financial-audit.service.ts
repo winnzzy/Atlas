@@ -1,7 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { AuditSeverity, Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
-import type { PrismaService } from '../prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 export interface FinancialAuditInput {
   code: string;
@@ -23,7 +23,7 @@ export interface FinancialAuditInput {
 
 @Injectable()
 export class FinancialAuditService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async log(input: FinancialAuditInput): Promise<void> {
     await this.prisma.$transaction(async (tx) => {

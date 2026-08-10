@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
-import type { PrismaService } from '../prisma/prisma.service';
-import type { TokenService } from './token.service';
+import { Inject, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { TokenService } from './token.service';
 import type { SessionDto } from './dto/auth-response.dto';
 import type { SessionListQueryDto } from './dto/session-list-query.dto';
 
@@ -14,8 +14,8 @@ export interface DeviceInfo {
 @Injectable()
 export class SessionService {
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly tokenService: TokenService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(TokenService) private readonly tokenService: TokenService,
   ) {}
 
   async createSession(

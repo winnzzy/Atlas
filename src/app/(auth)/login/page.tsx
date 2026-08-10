@@ -14,13 +14,19 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    const success = login(email, password);
+    setIsSubmitting(true);
+    setError('');
+
+    const success = await login(email, password);
     if (!success) {
-      setError('Invalid demo credentials.');
+      setError('Unable to sign in with the provided credentials.');
     }
+
+    setIsSubmitting(false);
   };
 
   return (
@@ -92,9 +98,9 @@ export default function LoginPage() {
                 </p>
               ) : null}
 
-              <Button className="w-full" type="submit">
+              <Button className="w-full" type="submit" disabled={isSubmitting}>
                 <Lock className="h-4 w-4" />
-                Sign in securely
+                {isSubmitting ? 'Signing in…' : 'Sign in securely'}
               </Button>
             </form>
 

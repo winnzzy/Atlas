@@ -1,7 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Decimal } from '@prisma/client/runtime/library';
 import type { Prisma } from '@prisma/client';
-import type { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../../prisma/prisma.service';
 import {
   AssetStatus,
   DepositStatus,
@@ -20,7 +20,7 @@ import type {
 export class InvestmentRepository {
   private readonly logger = new Logger(InvestmentRepository.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   // ─── Investment Product ───────────────────────────────────────────
 

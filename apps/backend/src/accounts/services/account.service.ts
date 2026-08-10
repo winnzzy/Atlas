@@ -1,4 +1,5 @@
 import {
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -44,8 +45,8 @@ export class AccountService {
   private readonly eventBus = new AccountEventBus();
 
   constructor(
-    private readonly accountRepository: AccountRepository,
-    private readonly accountPolicy: AccountPolicy,
+    @Inject(AccountRepository) private readonly accountRepository: AccountRepository,
+    @Inject(AccountPolicy) private readonly accountPolicy: AccountPolicy,
   ) {}
 
   getEventBus(): AccountEventBus {
@@ -138,8 +139,12 @@ export class AccountService {
       take: limit,
     });
 
+    const validAccounts = (accounts ?? []).filter(
+      (acc): acc is NonNullable<typeof acc> => acc != null,
+    );
+
     return {
-      data: accounts.map((acc) => this.toResponseDto(acc)),
+      data: validAccounts.map((acc) => this.toResponseDto(acc)),
       total,
       page,
       limit,

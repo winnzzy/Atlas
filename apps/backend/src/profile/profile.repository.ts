@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import type {
   ActiveSession,
   ConnectedDevice,
@@ -13,7 +13,7 @@ import type {
   UpdateCustomerSecurityInput,
 } from '@atlas/types';
 import type { Prisma } from '@prisma/client';
-import type { PrismaService } from '../prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import {
   mockAccessibilityPreferences,
   mockActiveSessions,
@@ -69,7 +69,7 @@ const mockState: MutableMockState = {
 export class ProfileRepository {
   private readonly logger = new Logger(ProfileRepository.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async getProfile(userId: string): Promise<CustomerProfile> {
     return this.withDatabaseFallback(

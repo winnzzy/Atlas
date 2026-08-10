@@ -24,7 +24,7 @@ describe('ProfileService', () => {
     const profile = { id: 'mock-user-id' } as CustomerProfile;
     jest.mocked(repository.getProfile).mockResolvedValue(profile);
 
-    await expect(service.getProfile()).resolves.toBe(profile);
+    await expect(service.getProfile('mock-user-id')).resolves.toBe(profile);
     expect(jest.mocked(repository.getProfile)).toHaveBeenCalledWith('mock-user-id');
   });
 
@@ -32,7 +32,7 @@ describe('ProfileService', () => {
     const security = { mfaEnabled: true } as CustomerSecurity;
     jest.mocked(repository.updateSecurity).mockResolvedValue(security);
 
-    await expect(service.updateSecurity({ mfaEnabled: true })).resolves.toBe(security);
+    await expect(service.updateSecurity('mock-user-id', { mfaEnabled: true })).resolves.toBe(security);
     expect(jest.mocked(repository.updateSecurity)).toHaveBeenCalledWith('mock-user-id', {
       mfaEnabled: true,
     });

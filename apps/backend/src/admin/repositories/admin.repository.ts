@@ -1,7 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import type { Prisma} from '@prisma/client';
 import { DeliveryStatus, NotificationChannel, UserStatus } from '@prisma/client';
-import type { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../../prisma/prisma.service';
 import type {
   AdminAuditQueryDto,
   AdminDashboardOverviewDto,
@@ -36,7 +36,7 @@ export class AdminRepository {
     maintenanceMode: false,
   };
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async getDashboardOverview(): Promise<AdminDashboardOverviewDto> {
     const now = new Date();

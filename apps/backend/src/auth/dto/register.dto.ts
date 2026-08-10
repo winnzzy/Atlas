@@ -1,4 +1,4 @@
-import { IsDateString, IsEmail, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsDateString, IsEmail, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class RegisterDto {
@@ -24,11 +24,13 @@ export class RegisterDto {
   @MaxLength(100)
   lastName!: string;
 
-  @ApiProperty({ format: 'date-time' })
+  @ApiProperty({ format: 'date-time', required: false })
+  @IsOptional()
   @IsDateString()
-  termsAcceptedAt!: string;
+  termsAcceptedAt?: string;
 
-  @ApiProperty({ format: 'date-time' })
+  @ApiProperty({ format: 'date-time', required: false })
+  @IsOptional()
   @IsDateString()
-  privacyAcceptedAt!: string;
+  privacyAcceptedAt?: string;
 }

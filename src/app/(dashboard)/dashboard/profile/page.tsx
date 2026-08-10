@@ -1,18 +1,30 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { getDemoState, updateProfile } from '@/lib/demo-store';
+import { loadDashboardData } from '@/lib/api-data';
 
 export default function ProfilePage() {
-  const [profile, setProfile] = useState(getDemoState().profile);
+  const [profile, setProfile] = useState({ fullName: '', email: '', phone: '', city: '' });
+
+  useEffect(() => {
+    void loadDashboardData().then(({ profile }) => {
+      if (profile) {
+        setProfile({
+          fullName: profile.fullName,
+          email: profile.email,
+          phone: '',
+          city: '',
+        });
+      }
+    });
+  }, []);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    updateProfile(profile);
   };
 
   return (

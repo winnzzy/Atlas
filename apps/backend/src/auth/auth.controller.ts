@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Inject,
   Param,
   Post,
   Query,
@@ -23,7 +24,7 @@ import {
 import type { Request, Response } from 'express';
 import { CurrentUser, type AuthenticatedUser } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
-import type {
+import {
   ForgotPasswordDto,
   LoginDto,
   RefreshTokenDto,
@@ -39,12 +40,14 @@ import {
 } from './dto/auth-response.dto';
 import type { SessionListQueryDto } from './dto/session-list-query.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import type { AuthService } from './auth.service';
+import { AuthService } from './auth.service';
 
 @ApiTags('Authentication')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(@Inject(AuthService) readonly authService: AuthService) {
+    console.log('AuthController constructor authService:', authService);
+  }
 
   @Public()
   @Post('register')
@@ -55,6 +58,7 @@ export class AuthController {
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ) {
+    console.log('Register handler this.authService:', this?.authService);
     const result = await this.authService.register(body, request);
     this.setAuthCookies(response, result.data.refreshToken, result.data.sessionId);
     return result;

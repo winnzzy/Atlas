@@ -1,7 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Decimal } from '@prisma/client/runtime/library';
 import type { Prisma } from '@prisma/client';
-import type { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../../prisma/prisma.service';
 import type { AccountStatusType, AccountTypeType } from '../dto/account-response.dto';
 
 type PrismaAccount = {
@@ -38,7 +38,7 @@ type PrismaAccount = {
 export class AccountRepository {
   private readonly logger = new Logger(AccountRepository.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async create(data: {
     userId: string;

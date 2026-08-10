@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-class ProfileDocumentDto {
+export class ProfileDocumentDto {
   @ApiProperty()
   id!: string;
 
@@ -17,7 +17,7 @@ class ProfileDocumentDto {
   expiresAt?: string;
 }
 
-class VerificationSummaryDto {
+export class VerificationSummaryDto {
   @ApiProperty()
   kycStatus!: string;
 
@@ -34,7 +34,7 @@ class VerificationSummaryDto {
   phoneVerified!: boolean;
 }
 
-class PersonalInformationDto {
+export class PersonalInformationDto {
   @ApiProperty()
   firstName!: string;
 
@@ -51,7 +51,7 @@ class PersonalInformationDto {
   ssnLast4!: string;
 }
 
-class ContactInformationDto {
+export class ContactInformationDto {
   @ApiProperty()
   email!: string;
 
@@ -65,7 +65,7 @@ class ContactInformationDto {
   phoneVerified!: boolean;
 }
 
-class AddressInformationDto {
+export class AddressInformationDto {
   @ApiProperty()
   line1!: string;
 
@@ -85,7 +85,7 @@ class AddressInformationDto {
   country!: string;
 }
 
-class EmploymentInformationDto {
+export class EmploymentInformationDto {
   @ApiProperty()
   employerName!: string;
 
@@ -99,7 +99,7 @@ class EmploymentInformationDto {
   annualIncomeRange!: string;
 }
 
-class TaxInformationDto {
+export class TaxInformationDto {
   @ApiProperty()
   taxResidencyCountry!: string;
 
@@ -117,19 +117,19 @@ export class ProfileResponseDto {
   @ApiProperty()
   avatarInitials!: string;
 
-  @ApiProperty({ type: PersonalInformationDto })
+  @ApiProperty({ type: () => PersonalInformationDto })
   personalInformation!: PersonalInformationDto;
 
-  @ApiProperty({ type: ContactInformationDto })
+  @ApiProperty({ type: () => ContactInformationDto })
   contactInformation!: ContactInformationDto;
 
-  @ApiProperty({ type: AddressInformationDto })
+  @ApiProperty({ type: () => AddressInformationDto })
   address!: AddressInformationDto;
 
-  @ApiProperty({ type: EmploymentInformationDto })
+  @ApiProperty({ type: () => EmploymentInformationDto })
   employment!: EmploymentInformationDto;
 
-  @ApiProperty({ type: TaxInformationDto })
+  @ApiProperty({ type: () => TaxInformationDto })
   taxInformation!: TaxInformationDto;
 
   @ApiProperty()
@@ -141,10 +141,10 @@ export class ProfileResponseDto {
   @ApiProperty()
   timezone!: string;
 
-  @ApiProperty({ type: VerificationSummaryDto })
+  @ApiProperty({ type: () => VerificationSummaryDto })
   verification!: VerificationSummaryDto;
 
-  @ApiProperty({ type: [ProfileDocumentDto] })
+  @ApiProperty({ type: () => [ProfileDocumentDto] })
   documents!: ProfileDocumentDto[];
 
   @ApiProperty()
@@ -154,7 +154,7 @@ export class ProfileResponseDto {
   updatedAt!: string;
 }
 
-class NotificationPreferencesDto {
+export class NotificationPreferencesDto {
   @ApiProperty()
   emailEnabled!: boolean;
 
@@ -183,7 +183,7 @@ class NotificationPreferencesDto {
   transferAlerts!: boolean;
 }
 
-class AccessibilityPreferencesDto {
+export class AccessibilityPreferencesDto {
   @ApiProperty()
   reducedMotion!: boolean;
 
@@ -210,14 +210,14 @@ export class PreferencesResponseDto {
   @ApiProperty()
   theme!: string;
 
-  @ApiProperty({ type: NotificationPreferencesDto })
+  @ApiProperty({ type: () => NotificationPreferencesDto })
   notificationPreferences!: NotificationPreferencesDto;
 
-  @ApiProperty({ type: AccessibilityPreferencesDto })
+  @ApiProperty({ type: () => AccessibilityPreferencesDto })
   accessibility!: AccessibilityPreferencesDto;
 }
 
-class ConnectedDeviceDto {
+export class ConnectedDeviceDto {
   @ApiProperty()
   id!: string;
 
@@ -246,7 +246,7 @@ class ConnectedDeviceDto {
   isTrusted!: boolean;
 }
 
-class ActiveSessionDto {
+export class ActiveSessionDto {
   @ApiProperty()
   id!: string;
 
@@ -269,7 +269,7 @@ class ActiveSessionDto {
   status!: string;
 }
 
-class SecurityTimelineEventDto {
+export class SecurityTimelineEventDto {
   @ApiProperty()
   id!: string;
 
@@ -308,17 +308,17 @@ export class SecurityResponseDto {
   @ApiProperty({ required: false })
   lastLoginAt?: string;
 
-  @ApiProperty({ type: [ConnectedDeviceDto] })
+  @ApiProperty({ type: () => [ConnectedDeviceDto] })
   connectedDevices!: ConnectedDeviceDto[];
 
-  @ApiProperty({ type: [ActiveSessionDto] })
+  @ApiProperty({ type: () => [ActiveSessionDto] })
   activeSessions!: ActiveSessionDto[];
 
-  @ApiProperty({ type: [SecurityTimelineEventDto] })
+  @ApiProperty({ type: () => [SecurityTimelineEventDto] })
   recentEvents!: SecurityTimelineEventDto[];
 }
 
-class ProfileActivityItemDto {
+export class ProfileActivityItemDto {
   @ApiProperty()
   id!: string;
 
@@ -342,6 +342,6 @@ class ProfileActivityItemDto {
 }
 
 export class ActivityResponseDto {
-  @ApiProperty({ type: [ProfileActivityItemDto] })
+  @ApiProperty({ type: () => [ProfileActivityItemDto] })
   items!: ProfileActivityItemDto[];
 }

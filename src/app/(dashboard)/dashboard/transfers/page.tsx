@@ -1,16 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Table, Tbody, Td, Th, Thead, Tr } from '@/components/ui/table';
-import { createTransfer, getTransfers } from '@/lib/demo-store';
+import { loadDashboardData, type DashboardTransfer } from '@/lib/api-data';
 
 export default function TransfersPage() {
-  const [transfers, setTransfers] = useState(getTransfers());
+  const [transfers, setTransfers] = useState<DashboardTransfer[]>([]);
   const [beneficiary, setBeneficiary] = useState('Northwind Capital');
   const [amount, setAmount] = useState('2500');
   const [type, setType] = useState('Domestic');
@@ -18,14 +18,24 @@ export default function TransfersPage() {
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    createTransfer({
-      beneficiary,
-      amount: Number(amount),
-      type: type as 'Domestic' | 'International' | 'Same Day',
-      description,
-    });
-    setTransfers(getTransfers());
+    setTransfers((currentTransfers) => [
+      {
+        id: `local-${Date.now()}`,
+        reference: 'PENDING',
+        beneficiary,
+        amount: Number(amount),
+        type: type as 'Domestic' | 'International' | 'Same Day',
+        status: 'Pending',
+        description,
+        date: new Date().toISOString().slice(0, 10),
+      },
+      ...currentTransfers,
+    ]);
   };
+
+  useEffect(() => {
+    void loadDashboardData().then(({ transfers }) => setTransfers(transfers));
+  }, []);
 
   return (
     <DashboardLayout>

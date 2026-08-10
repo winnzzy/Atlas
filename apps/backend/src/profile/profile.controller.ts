@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Inject, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, type AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -17,7 +17,7 @@ import type { UpdateSecurityDto } from './dto/update-security.dto';
 @UseGuards(JwtAuthGuard)
 @Controller('profile')
 export class ProfileController {
-  constructor(@Inject(ProfileService) private readonly profileService: ProfileService) {}
+  constructor(private readonly profileService: ProfileService) {}
 
   @Get()
   @ApiOperation({ summary: 'Get the authenticated customer profile' })

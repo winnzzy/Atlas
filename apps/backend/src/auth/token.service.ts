@@ -1,6 +1,6 @@
-import { Injectable } from '@nestjs/common';
-import type { JwtService } from '@nestjs/jwt';
-import type { ConfigService } from '@nestjs/config';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { createHash, randomBytes, randomUUID } from 'crypto';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
 
@@ -10,11 +10,11 @@ export class TokenService {
   private readonly refreshTokenTtlDays: number;
 
   constructor(
-    private readonly jwtService: JwtService,
-    private readonly configService: ConfigService,
+    @Inject(JwtService) private readonly jwtService: JwtService,
+    @Optional() @Inject(ConfigService) private readonly configService?: ConfigService,
   ) {
     this.accessTokenTtlSeconds = this.resolveAccessTokenTtlSeconds();
-    this.refreshTokenTtlDays = Number(this.configService.get('JWT_REFRESH_EXPIRATION_DAYS', 7));
+    this.refreshTokenTtlDays = Number(this.getConfigValue('JWT_REFRESH_EXPIRATION_DAYS', '7'));
   }
 
   async generateTokenPair(user: {
@@ -62,8 +62,16 @@ export class TokenService {
   }
 
   private resolveAccessTokenTtlSeconds(): number {
-    const value = this.configService.get<string>('JWT_ACCESS_EXPIRATION', '15m');
-    return this.parseDurationToSeconds(value);
+    const value = this.getConfigValue('JWT_ACCESS_EXPIRATION', '15m');
+    return this.parseDurationToSeconds(value ?? '15m');
+  }
+
+  private getConfigValue(key: string, fallback: string): string {
+    if (this.configService) {
+      return this.configService.get<string>(key, fallback) ?? fallback;
+    }
+
+    return process.env[key] ?? fallback;
   }
 
   private parseDurationToSeconds(value: string): number {

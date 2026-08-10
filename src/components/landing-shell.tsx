@@ -5,14 +5,18 @@ import { ArrowRight, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { getCurrentUser } from '@/lib/demo-store';
-import type { User } from '@/lib/demo-data';
+import { getStoredAccessToken } from '@/lib/api';
+
+type LandingUser = {
+  role: 'CUSTOMER' | 'SUPER_ADMIN';
+};
 
 export function LandingShell() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<LandingUser | null>(null);
 
   useEffect(() => {
-    setUser(getCurrentUser());
+    const token = getStoredAccessToken();
+    setUser(token ? { role: 'CUSTOMER' } : null);
   }, []);
 
   return (

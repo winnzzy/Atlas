@@ -1,14 +1,18 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { getNotifications, markNotificationRead } from '@/lib/demo-store';
+import { loadDashboardData, type DashboardNotification } from '@/lib/api-data';
 
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState(getNotifications());
+  const [notifications, setNotifications] = useState<DashboardNotification[]>([]);
+
+  useEffect(() => {
+    void loadDashboardData().then(({ notifications }) => setNotifications(notifications));
+  }, []);
 
   const unreadCount = useMemo(() => notifications.filter((item) => !item.read).length, [notifications]);
 
@@ -36,8 +40,11 @@ export default function NotificationsPage() {
                       <Button
                         variant="ghost"
                         onClick={() => {
-                          markNotificationRead(item.id);
-                          setNotifications(getNotifications());
+                          setNotifications((currentNotifications) =>
+                            currentNotifications.map((notification) =>
+                              notification.id === item.id ? { ...notification, read: true } : notification,
+                            ),
+                          );
                         }}
                       >
                         Mark read

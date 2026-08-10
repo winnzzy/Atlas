@@ -3,19 +3,20 @@ import {
   ConflictException,
   HttpException,
   HttpStatus,
+  Inject,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
-import type { AuthRepository } from './auth.repository';
-import type { PasswordService } from './password.service';
+import { AuthRepository } from './auth.repository';
+import { PasswordService } from './password.service';
 import type { LoginDto, RegisterDto, ResetPasswordDto } from './dto';
 
 @Injectable()
 export class IdentityService {
   constructor(
-    private readonly authRepository: AuthRepository,
-    private readonly passwordService: PasswordService,
+    @Inject(AuthRepository) private readonly authRepository: AuthRepository,
+    @Inject(PasswordService) private readonly passwordService: PasswordService,
   ) {}
 
   async register(input: RegisterDto) {
@@ -25,15 +26,26 @@ export class IdentityService {
     }
 
     const passwordHash = await this.passwordService.hashPassword(input.password);
+    const termsAcceptedAt = this.toValidDate(input.termsAcceptedAt);
+    const privacyAcceptedAt = this.toValidDate(input.privacyAcceptedAt);
 
     return this.authRepository.createUser({
       email: input.email,
       passwordHash,
       firstName: input.firstName,
       lastName: input.lastName,
-      termsAcceptedAt: new Date(input.termsAcceptedAt),
-      privacyAcceptedAt: new Date(input.privacyAcceptedAt),
+      termsAcceptedAt,
+      privacyAcceptedAt,
     });
+  }
+
+  private toValidDate(value: string | undefined): Date {
+    if (!value) {
+      return new Date();
+    }
+
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
   }
 
   async validateCredentials(input: LoginDto) {

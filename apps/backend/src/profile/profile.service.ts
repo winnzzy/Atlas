@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import type {
   CustomerPreferences,
   CustomerProfile,
@@ -14,8 +14,8 @@ import { ProfileRepository } from './profile.repository';
 @Injectable()
 export class ProfileService {
   constructor(
-    @Inject(ProfileRepository) private readonly profileRepository: ProfileRepository,
-    @Inject(ProfileContextService) private readonly profileContextService: ProfileContextService,
+    private readonly profileRepository: ProfileRepository,
+    private readonly profileContextService: ProfileContextService,
   ) {}
 
   getProfile(userId: string): Promise<CustomerProfile> {

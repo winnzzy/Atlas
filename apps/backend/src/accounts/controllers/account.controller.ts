@@ -11,6 +11,7 @@ import {
   HttpCode,
   HttpStatus,
   Inject,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -29,10 +30,12 @@ import type { LockAccountDto, UnlockAccountDto } from '../dto/lock-account.dto';
 import { AccountResponseDto } from '../dto/account-response.dto';
 import type { AccountStatusType, AccountTypeType } from '../dto/account-response.dto';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import type { AuthenticatedUser } from '../policies/account.policy';
 
 @ApiTags('Accounts')
 @ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller('accounts')
 export class AccountController {
   constructor(@Inject(AccountService) private readonly accountService: AccountService) {}

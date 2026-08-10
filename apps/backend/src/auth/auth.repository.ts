@@ -37,9 +37,12 @@ export class AuthRepository {
     passwordHash: string;
     firstName: string;
     lastName: string;
-    termsAcceptedAt: Date;
-    privacyAcceptedAt: Date;
+    termsAcceptedAt?: Date | string | null;
+    privacyAcceptedAt?: Date | string | null;
   }) {
+    const termsAcceptedAt = this.normalizeDate(input.termsAcceptedAt);
+    const privacyAcceptedAt = this.normalizeDate(input.privacyAcceptedAt);
+
     return this.prisma.user.create({
       data: {
         email: input.email.toLowerCase(),
@@ -47,11 +50,24 @@ export class AuthRepository {
         firstName: input.firstName,
         lastName: input.lastName,
         status: 'ACTIVE',
-        termsAcceptedAt: input.termsAcceptedAt,
-        privacyAcceptedAt: input.privacyAcceptedAt,
+        termsAcceptedAt,
+        privacyAcceptedAt,
         emailVerified: false,
       },
     });
+  }
+
+  private normalizeDate(value: Date | string | null | undefined): Date {
+    if (value instanceof Date) {
+      return Number.isNaN(value.getTime()) ? new Date() : value;
+    }
+
+    if (typeof value === 'string') {
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+    }
+
+    return new Date();
   }
 
   updateSuccessfulLogin(userId: string, ipAddress: string) {

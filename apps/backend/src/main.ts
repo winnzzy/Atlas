@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
@@ -30,18 +31,25 @@ async function bootstrap(): Promise<void> {
   );
 
   // Swagger
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('Atlas API')
-    .setDescription('Atlas Digital Banking Platform API')
-    .setVersion('1.0')
-    .build();
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/docs', app, document);
+  const enableSwagger = process.env['SWAGGER_ENABLED'] === 'true' || process.env['NODE_ENV'] === 'production';
+  if (enableSwagger) {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('Atlas API')
+      .setDescription('Atlas Digital Banking Platform API')
+      .setVersion('1.0')
+      .build();
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('api/docs', app, document);
+  }
 
   const port = process.env['PORT'] ?? 3001;
   await app.listen(port);
   logger.log(`Atlas API running on port ${port}`);
-  logger.log(`Swagger docs available at http://localhost:${port}/api/docs`);
+  if (enableSwagger) {
+    logger.log(`Swagger docs available at http://localhost:${port}/api/docs`);
+  } else {
+    logger.log('Swagger docs disabled for this environment');
+  }
 }
 
 void bootstrap();

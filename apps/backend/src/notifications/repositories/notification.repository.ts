@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import type {
   DeliveryStatus,
   NotificationChannel,
@@ -6,7 +6,7 @@ import type {
   NotificationType,
   Prisma,
 } from '@prisma/client';
-import type { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../../prisma/prisma.service';
 import type {
   NotificationPreferenceView,
   NotificationTemplateView,
@@ -43,7 +43,7 @@ export interface NotificationSearchInput {
 
 @Injectable()
 export class NotificationRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async createNotification(input: NotificationCreateInput): Promise<NotificationView> {
     const notification = await this.prisma.notification.create({
