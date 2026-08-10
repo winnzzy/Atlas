@@ -5,6 +5,19 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 
+const defaultCorsOrigins = [
+  'https://atlas-plyi.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:3001',
+];
+
+const configuredCorsOrigins = (process.env['CORS_ORIGIN'] ?? '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter((origin) => origin.length > 0 && origin !== '*');
+
+const corsOrigins = Array.from(new Set([...defaultCorsOrigins, ...configuredCorsOrigins]));
+
 async function bootstrap(): Promise<void> {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule, {
@@ -13,7 +26,10 @@ async function bootstrap(): Promise<void> {
 
   // Security
   app.use(helmet());
-  app.enableCors();
+  app.enableCors({
+    origin: corsOrigins,
+    credentials: true,
+  });
 
   // Global prefix
   app.setGlobalPrefix('api/v1');
