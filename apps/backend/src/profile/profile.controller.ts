@@ -1,6 +1,8 @@
-import { Body, Controller, Get, Patch } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Patch, UseGuards } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { ProfileService } from './profile.service';
+import { CurrentUser, type AuthenticatedUser } from '../auth/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ProfileService } from './profile.service';
 import {
   ActivityResponseDto,
   PreferencesResponseDto,
@@ -12,56 +14,57 @@ import type { UpdateProfileDto } from './dto/update-profile.dto';
 import type { UpdateSecurityDto } from './dto/update-security.dto';
 
 @ApiTags('Profile')
+@UseGuards(JwtAuthGuard)
 @Controller('profile')
 export class ProfileController {
-  constructor(private readonly profileService: ProfileService) {}
+  constructor(@Inject(ProfileService) private readonly profileService: ProfileService) {}
 
   @Get()
   @ApiOperation({ summary: 'Get the authenticated customer profile' })
   @ApiOkResponse({ type: ProfileResponseDto })
-  getProfile() {
-    return this.profileService.getProfile();
+  getProfile(@CurrentUser() user: AuthenticatedUser) {
+    return this.profileService.getProfile(user.id);
   }
 
   @Patch()
   @ApiOperation({ summary: 'Update the authenticated customer profile' })
   @ApiOkResponse({ type: ProfileResponseDto })
-  updateProfile(@Body() body: UpdateProfileDto) {
-    return this.profileService.updateProfile(body);
+  updateProfile(@CurrentUser() user: AuthenticatedUser, @Body() body: UpdateProfileDto) {
+    return this.profileService.updateProfile(user.id, body);
   }
 
   @Get('preferences')
   @ApiOperation({ summary: 'Get customer profile preferences' })
   @ApiOkResponse({ type: PreferencesResponseDto })
-  getPreferences() {
-    return this.profileService.getPreferences();
+  getPreferences(@CurrentUser() user: AuthenticatedUser) {
+    return this.profileService.getPreferences(user.id);
   }
 
   @Patch('preferences')
   @ApiOperation({ summary: 'Update customer profile preferences' })
   @ApiOkResponse({ type: PreferencesResponseDto })
-  updatePreferences(@Body() body: UpdatePreferencesDto) {
-    return this.profileService.updatePreferences(body);
+  updatePreferences(@CurrentUser() user: AuthenticatedUser, @Body() body: UpdatePreferencesDto) {
+    return this.profileService.updatePreferences(user.id, body);
   }
 
   @Get('security')
   @ApiOperation({ summary: 'Get customer profile security settings' })
   @ApiOkResponse({ type: SecurityResponseDto })
-  getSecurity() {
-    return this.profileService.getSecurity();
+  getSecurity(@CurrentUser() user: AuthenticatedUser) {
+    return this.profileService.getSecurity(user.id);
   }
 
   @Patch('security')
   @ApiOperation({ summary: 'Update customer profile security settings' })
   @ApiOkResponse({ type: SecurityResponseDto })
-  updateSecurity(@Body() body: UpdateSecurityDto) {
-    return this.profileService.updateSecurity(body);
+  updateSecurity(@CurrentUser() user: AuthenticatedUser, @Body() body: UpdateSecurityDto) {
+    return this.profileService.updateSecurity(user.id, body);
   }
 
   @Get('activity')
   @ApiOperation({ summary: 'Get customer profile activity feed' })
   @ApiOkResponse({ type: ActivityResponseDto })
-  getActivity() {
-    return this.profileService.getActivity();
+  getActivity(@CurrentUser() user: AuthenticatedUser) {
+    return this.profileService.getActivity(user.id);
   }
 }
