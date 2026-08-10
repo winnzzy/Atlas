@@ -1,18 +1,35 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
+    "jsx": "preserve",
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
     "paths": {
-      "@atlas/ui": ["./packages/ui/src"],
-      "@atlas/ui/*": ["./packages/ui/src/*"],
-      "@atlas/shared": ["./packages/shared/src"],
-      "@atlas/shared/*": ["./packages/shared/src/*"],
-      "@atlas/api-client": ["./packages/api-client/src"],
-      "@atlas/api-client/*": ["./packages/api-client/src/*"],
-      "@atlas/config": ["./packages/config/src"],
-      "@atlas/config/*": ["./packages/config/src/*"],
-      "@atlas/types": ["./packages/types/src"],
-      "@atlas/types/*": ["./packages/types/src/*"]
-    }
+      "@/*": ["./src/*"]
+    },
+    "allowJs": true
   },
-  "exclude": ["node_modules", "dist", "build", ".next", "coverage"]
+  "include": [
+    "next-env.d.ts",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    ".next",
+    "apps",
+    "packages",
+    "docs",
+    "docker",
+    "scripts"
+  ]
 }
