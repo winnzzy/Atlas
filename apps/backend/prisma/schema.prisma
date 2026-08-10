@@ -386,6 +386,7 @@ enum NotificationType {
   LOAN
   SYSTEM
   MARKETING
+  INVESTMENT
 }
 
 enum NotificationPriority {
@@ -404,10 +405,14 @@ enum NotificationChannel {
 
 enum DeliveryStatus {
   PENDING
+  QUEUED
+  PROCESSING
   SENT
   DELIVERED
   FAILED
   BOUNCED
+  READ
+  CANCELLED
 }
 
 // ============================================================
@@ -488,7 +493,7 @@ model User {
   loanApplications     LoanApplication[] @relation("UserLoanApplications")
   loans                Loan[]
   notifications        Notification[]
-  notificationPreference NotificationPreference?
+  notificationPreferences NotificationPreference[]
   adminUser            AdminUser?
   auditLogs            AuditLog[] @relation("UserAuditLogs")
 
@@ -1376,22 +1381,32 @@ model LoanDocument {
 // ============================================================
 
 model Notification {
-  id         String               @id @default(uuid()) @db.Uuid
-  userId     String               @map("user_id") @db.Uuid
-  type       NotificationType
-  title      String               @db.VarChar(255)
-  body       String               @db.Text()
-  data       Json?                @db.JsonB
-  priority   NotificationPriority @default(NORMAL)
-  isRead     Boolean              @default(false) @map("is_read")
-  readAt     DateTime?            @map("read_at") @db.Timestamptz()
-  archivedAt DateTime?            @map("archived_at") @db.Timestamptz()
-  createdAt  DateTime             @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt  DateTime             @updatedAt @map("updated_at") @db.Timestamptz()
-  deletedAt  DateTime?            @map("deleted_at") @db.Timestamptz()
+  id                 String               @id @default(uuid()) @db.Uuid
+  userId             String               @map("user_id") @db.Uuid
+  type               NotificationType
+  title              String               @db.VarChar(255)
+  body               String               @db.Text()
+  data               Json?                @db.JsonB
+  priority           NotificationPriority @default(NORMAL)
+  status             DeliveryStatus       @default(PENDING)
+  templateCode       String?              @map("template_code") @db.VarChar(100)
+  templateVersion    Int?                 @map("template_version")
+  variables          Json?                @db.JsonB
+  sourceEventType    String?              @map("source_event_type") @db.VarChar(255)
+  sourceEventId      String?              @map("source_event_id") @db.VarChar(255)
+  sourceAggregateId  String?              @map("source_aggregate_id") @db.VarChar(255)
+  expiresAt          DateTime?            @map("expires_at") @db.Timestamptz()
+  isRead             Boolean              @default(false) @map("is_read")
+  readAt             DateTime?            @map("read_at") @db.Timestamptz()
+  cancelledAt        DateTime?            @map("cancelled_at") @db.Timestamptz()
+  archivedAt         DateTime?            @map("archived_at") @db.Timestamptz()
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt          DateTime             @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt          DateTime?            @map("deleted_at") @db.Timestamptz()
 
-  user       User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  deliveries NotificationDelivery[]
+  user          User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries    NotificationDelivery[]
+  auditEvents   NotificationAuditEvent[]
 
   @@index([userId])
   @@index([userId, isRead])
@@ -1401,22 +1416,30 @@ model Notification {
 }
 
 model NotificationPreference {
-  id               String   @id @default(uuid()) @db.Uuid
-  userId           String   @unique @map("user_id") @db.Uuid
-  emailEnabled     Boolean  @default(true) @map("email_enabled")
-  smsEnabled       Boolean  @default(false) @map("sms_enabled")
-  pushEnabled      Boolean  @default(true) @map("push_enabled")
-  transactionAlerts Boolean @default(true) @map("transaction_alerts")
-  securityAlerts   Boolean  @default(true) @map("security_alerts")
-  marketingEmails  Boolean  @default(false) @map("marketing_emails")
-  loginAlerts      Boolean  @default(true) @map("login_alerts")
-  balanceAlerts    Boolean  @default(true) @map("balance_alerts")
-  transferAlerts   Boolean  @default(true) @map("transfer_alerts")
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+  id               String              @id @default(uuid()) @db.Uuid
+  userId           String              @map("user_id") @db.Uuid
+  type             NotificationType
+  channel          NotificationChannel
+  enabled          Boolean             @default(true)
+  quietHoursStart  String?             @map("quiet_hours_start") @db.VarChar(10)
+  quietHoursEnd    String?             @map("quiet_hours_end") @db.VarChar(10)
+  timezone         String              @default("America/New_York")
+  language         String              @default("en")
+  emailEnabled     Boolean             @default(true) @map("email_enabled")
+  smsEnabled       Boolean             @default(false) @map("sms_enabled")
+  pushEnabled      Boolean             @default(true) @map("push_enabled")
+  transactionAlerts Boolean             @default(true) @map("transaction_alerts")
+  securityAlerts   Boolean             @default(true) @map("security_alerts")
+  marketingEmails  Boolean             @default(false) @map("marketing_emails")
+  loginAlerts      Boolean             @default(true) @map("login_alerts")
+  balanceAlerts    Boolean             @default(true) @map("balance_alerts")
+  transferAlerts   Boolean             @default(true) @map("transfer_alerts")
+  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt        DateTime            @updatedAt @map("updated_at") @db.Timestamptz()
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, type, channel])
   @@map("notification_preferences")
 }
 
@@ -1426,15 +1449,33 @@ model NotificationTemplate {
   name            String              @db.VarChar(255)
   type            NotificationType
   channel         NotificationChannel
+  language        String              @default("en")
+  version         Int                 @default(1)
   subjectTemplate String              @map("subject_template") @db.VarChar(255)
   bodyTemplate    String              @map("body_template") @db.Text()
+  variables       Json?               @db.JsonB
   isActive        Boolean             @default(true) @map("is_active")
   createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt       DateTime            @updatedAt @map("updated_at") @db.Timestamptz()
 
+  @@unique([code, channel, language, version])
   @@index([code])
   @@index([type, channel])
   @@map("notification_templates")
+}
+
+model NotificationAuditEvent {
+  id             String           @id @default(uuid()) @db.Uuid
+  notificationId String           @map("notification_id") @db.Uuid
+  status         DeliveryStatus   @default(PENDING)
+  channel        NotificationChannel?
+  reason         String?          @db.VarChar(255)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@index([notificationId])
+  @@map("notification_audit_events")
 }
 
 model NotificationDelivery {
@@ -1446,6 +1487,7 @@ model NotificationDelivery {
   sentAt            DateTime?        @map("sent_at") @db.Timestamptz()
   deliveredAt       DateTime?        @map("delivered_at") @db.Timestamptz()
   failedAt          DateTime?        @map("failed_at") @db.Timestamptz()
+  processingAt      DateTime?        @map("processing_at") @db.Timestamptz()
   failureReason     String?          @map("failure_reason") @db.VarChar(255)
   retryCount        Int              @default(0) @map("retry_count")
   provider          String?          @db.VarChar(50)

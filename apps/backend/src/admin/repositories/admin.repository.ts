@@ -36,7 +36,7 @@ export class AdminRepository {
     maintenanceMode: false,
   };
 
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService & Record<string, any>) {}
 
   async getDashboardOverview(): Promise<AdminDashboardOverviewDto> {
     const now = new Date();
@@ -68,9 +68,9 @@ export class AdminRepository {
         return ach + wire;
       }),
       this.prisma.cardTransaction.count(),
-      this.prisma.investmentPortfolio.count(),
-      this.prisma.investmentCustodyDeposit.count({ where: { status: 'PENDING' } }).then(async (d) => {
-        const w = await this.prisma.investmentCustodyWithdrawal.count({ where: { status: 'PENDING' } });
+      this.prisma.investmentPortfolio?.count?.() ?? Promise.resolve(0),
+      this.prisma.investmentCustodyDeposit?.count?.({ where: { status: 'PENDING' } }).then(async (d: number) => {
+        const w = await this.prisma.investmentCustodyWithdrawal?.count?.({ where: { status: 'PENDING' } }) ?? 0;
         return d + w;
       }),
       this.prisma.notification.count({ where: { status: { in: [DeliveryStatus.QUEUED, DeliveryStatus.PROCESSING] } } }),
@@ -135,7 +135,7 @@ export class AdminRepository {
       this.prisma.transaction.aggregate({ where: { createdAt: { gte: monthStart }, deletedAt: null }, _sum: { amount: true }, _count: { id: true } }),
       this.prisma.transaction.aggregate({ where: { createdAt: { gte: previousMonthStart, lt: monthStart }, deletedAt: null }, _sum: { amount: true }, _count: { id: true } }),
       this.prisma.user.count({ where: { status: UserStatus.ACTIVE, deletedAt: null } }),
-      this.prisma.investmentPortfolio.aggregate({ _sum: { totalValue: true } }),
+      this.prisma.investmentPortfolio?.aggregate?.({ _sum: { totalValue: true } }) ?? Promise.resolve({ _sum: { totalValue: null } }),
     ]);
 
     const monthCurrent = Number(monthlyTx._sum.amount ?? 0);
@@ -224,7 +224,7 @@ export class AdminRepository {
         },
         take: limit,
       }),
-      this.prisma.investmentProduct.findMany({
+      this.prisma.investmentProduct?.findMany?.({
         where: {
           OR: [
             { symbol: { contains: q, mode: 'insensitive' } },
@@ -236,49 +236,49 @@ export class AdminRepository {
     ]);
 
     const items: AdminSearchResultItemDto[] = [
-      ...users.map((u) => ({
+      ...users.map((u: { id: string; firstName: string; lastName: string; email: string; phoneNumber?: string | null; status: unknown }) => ({
         kind: 'customer',
         id: u.id,
         primary: `${u.firstName} ${u.lastName}`,
         secondary: u.email,
         metadata: { phone: u.phoneNumber ?? null, status: u.status },
       })),
-      ...accounts.map((a) => ({
+      ...accounts.map((a: { id: string; accountNumber: string; type: string; status: string; currency: string }) => ({
         kind: 'account',
         id: a.id,
         primary: a.accountNumber,
         secondary: a.type,
         metadata: { status: a.status, currency: a.currency },
       })),
-      ...cards.map((c) => ({
+      ...cards.map((c: { id: string; lastFour: string; status: string; type: string; network: string }) => ({
         kind: 'card',
         id: c.id,
         primary: `****${c.lastFour}`,
         secondary: c.status,
         metadata: { type: c.type, network: c.network },
       })),
-      ...transactions.map((t) => ({
+      ...transactions.map((t: { id: string; reference?: string | null; type: string; status: string; amount: { toString(): string } | number | null }) => ({
         kind: 'transaction',
         id: t.id,
         primary: t.reference ?? t.id,
         secondary: t.type,
         metadata: { status: t.status, amount: Number(t.amount) },
       })),
-      ...achTransfers.map((t) => ({
+      ...achTransfers.map((t: { id: string; reference?: string | null; status: string; amount: { toString(): string } | number | null }) => ({
         kind: 'transfer',
         id: t.id,
         primary: t.reference ?? t.id,
         secondary: 'ACH',
         metadata: { status: t.status, amount: Number(t.amount) },
       })),
-      ...wireTransfers.map((t) => ({
+      ...wireTransfers.map((t: { id: string; reference?: string | null; status: string; amount: { toString(): string } | number | null }) => ({
         kind: 'transfer',
         id: t.id,
         primary: t.reference ?? t.id,
         secondary: 'WIRE',
         metadata: { status: t.status, amount: Number(t.amount) },
       })),
-      ...investments.map((i) => ({
+      ...investments.map((i: { id: string; symbol: string; name: string; status: string }) => ({
         kind: 'investment',
         id: i.id,
         primary: i.symbol,
@@ -481,8 +481,8 @@ export class AdminRepository {
 
     return {
       profile,
-      accounts: accounts.map((x) => x.account),
-      cards: cards.map((x) => x.card),
+      accounts: accounts.map((x: { account: unknown }) => x.account),
+      cards: cards.map((x: { card: unknown }) => x.card),
       investments,
       transfers: [...transfersAch, ...transfersWire],
       transactions: txs,
@@ -492,18 +492,18 @@ export class AdminRepository {
 
   async getSettings(): Promise<AdminSettingsDto> {
     const [assetSymbols, accountCurrencies, transactionCurrencies, networks] = await Promise.all([
-      this.prisma.investmentProduct.findMany({ select: { symbol: true }, orderBy: { symbol: 'asc' } }),
+      this.prisma.investmentProduct?.findMany?.({ select: { symbol: true }, orderBy: { symbol: 'asc' } }) ?? [],
       this.prisma.bankAccount.findMany({ select: { currency: true }, distinct: ['currency'] }),
       this.prisma.transaction.findMany({ select: { currency: true }, distinct: ['currency'] }),
-      this.prisma.investmentCustodyWallet.findMany({ select: { network: true }, distinct: ['network'] }),
+      this.prisma.investmentCustodyWallet?.findMany?.({ select: { network: true }, distinct: ['network'] }) ?? [],
     ]);
 
-    const currencies = Array.from(new Set([...accountCurrencies.map((x) => x.currency), ...transactionCurrencies.map((x) => x.currency)])).sort();
+    const currencies = Array.from(new Set([...accountCurrencies.map((x: { currency: string }) => x.currency), ...transactionCurrencies.map((x: { currency: string }) => x.currency)])).sort();
 
     return {
-      supportedAssets: assetSymbols.map((x) => x.symbol),
+      supportedAssets: assetSymbols.map((x: { symbol: string }) => x.symbol),
       currencies,
-      networks: networks.map((x) => x.network).sort(),
+      networks: networks.map((x: { network: string }) => x.network).sort(),
       limits: this.settingsState.limits,
       featureFlags: this.settingsState.featureFlags,
       environment: {
@@ -532,8 +532,8 @@ export class AdminRepository {
 
   async getReportRows(kind: string, from?: Date, to?: Date): Promise<Array<Record<string, string | number | boolean | null>>> {
     if (kind === 'AUM') {
-      const portfolios = await this.prisma.investmentPortfolio.findMany({ select: { id: true, userId: true, totalValue: true } });
-      return portfolios.map((p) => ({ portfolioId: p.id, userId: p.userId, totalValue: Number(p.totalValue) }));
+      const portfolios = await this.prisma.investmentPortfolio?.findMany?.({ select: { id: true, userId: true, totalValue: true } }) ?? [];
+      return portfolios.map((p: { id: string; userId: string; totalValue: unknown }) => ({ portfolioId: p.id, userId: p.userId, totalValue: Number(p.totalValue) }));
     }
 
     if (kind === 'ACTIVE_USERS') {

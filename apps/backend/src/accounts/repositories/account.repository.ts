@@ -1,6 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Decimal } from '@prisma/client/runtime/library';
-import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AccountStatusType, AccountTypeType } from '../dto/account-response.dto';
 
@@ -50,7 +49,7 @@ export class AccountRepository {
     currency?: string;
     isDemo?: boolean;
   }): Promise<PrismaAccount> {
-    const account = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const account = await this.prisma.$transaction(async (tx) => {
       const created = await tx.bankAccount.create({
         data: {
           accountNumber: data.accountNumber,

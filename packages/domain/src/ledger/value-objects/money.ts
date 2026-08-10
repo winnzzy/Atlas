@@ -7,8 +7,9 @@ export class Money {
   private constructor(
     private readonly _amount: bigint,
     private readonly _currency: string,
+    allowNegative = false,
   ) {
-    if (_amount < 0n) {
+    if (!allowNegative && _amount < 0n) {
       throw new Error('Money amount cannot be negative');
     }
     if (!_currency || _currency.length !== 3) {
@@ -18,6 +19,10 @@ export class Money {
 
   static fromMinorUnits(amount: bigint, currency: string): Money {
     return new Money(amount, currency.toUpperCase());
+  }
+
+  static fromSignedMinorUnits(amount: bigint, currency: string): Money {
+    return new Money(amount, currency.toUpperCase(), true);
   }
 
   static fromDecimal(amount: number, currency: string, decimals = 2): Money {

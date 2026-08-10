@@ -70,7 +70,7 @@ export class WithdrawalService {
 
     const userWithdrawals = await this.repository.findWithdrawalsByUser(userId);
     const pendingForProduct = userWithdrawals.find(
-      (withdrawal) =>
+      (withdrawal: { productId: string; status: WithdrawalStatus }) =>
         withdrawal.productId === product.id &&
         withdrawal.status === WithdrawalStatus.PENDING,
     );
@@ -130,7 +130,7 @@ export class WithdrawalService {
     const withdrawals = filters?.userId
       ? await this.repository.findWithdrawalsByUser(filters.userId)
       : await this.repository.findWithdrawals();
-    return withdrawals.map((w) => this.mapper.toWithdrawalResponseDto(w));
+    return withdrawals.map((w: unknown) => this.mapper.toWithdrawalResponseDto(w as never));
   }
 
   /**

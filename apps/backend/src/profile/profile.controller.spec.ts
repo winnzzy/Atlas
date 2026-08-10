@@ -17,15 +17,17 @@ describe('ProfileController', () => {
 
   it('returns profile data from the service', async () => {
     const payload = { id: 'mock-user-id' } as CustomerProfile;
+    const user = { id: 'mock-user-id' } as never;
     jest.mocked(service.getProfile).mockResolvedValue(payload);
-    await expect(controller.getProfile()).resolves.toEqual(payload);
+    await expect(controller.getProfile(user)).resolves.toEqual(payload);
   });
 
   it('forwards preference updates to the service', async () => {
     const payload = { theme: 'system' } as CustomerPreferences;
+    const user = { id: 'mock-user-id' } as never;
     jest.mocked(service.updatePreferences).mockResolvedValue(payload);
 
-    await expect(controller.updatePreferences(payload)).resolves.toEqual(payload);
-    expect(jest.mocked(service.updatePreferences)).toHaveBeenCalledWith(payload);
+    await expect(controller.updatePreferences(user, payload as never)).resolves.toEqual(payload);
+    expect(jest.mocked(service.updatePreferences)).toHaveBeenCalledWith('mock-user-id', payload);
   });
 });

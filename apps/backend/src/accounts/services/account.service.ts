@@ -111,6 +111,41 @@ export class AccountService {
     return response;
   }
 
+  async findById(accountId: string): Promise<{
+    id: string;
+    status: string;
+    currency: string;
+    currentBalance: Decimal | null;
+    availableBalance: Decimal | null;
+    accountNumber?: string;
+    routingNumber?: string;
+    type?: string;
+    name?: string;
+    nickname?: string | null;
+  } | null> {
+    const account = await this.accountRepository.findById(accountId);
+    if (!account) {
+      return null;
+    }
+
+    return {
+      id: account.id,
+      status: account.status,
+      currency: account.currency,
+      currentBalance: account.currentBalance,
+      availableBalance: account.availableBalance,
+      accountNumber: account.accountNumber,
+      routingNumber: account.routingNumber,
+      type: account.type,
+      name: account.name,
+      nickname: account.nickname,
+    };
+  }
+
+  async isAccountHolder(accountId: string, userId: string): Promise<boolean> {
+    return this.accountRepository.isAccountHolder(accountId, userId);
+  }
+
   /**
    * Get a single account by ID with ownership validation.
    */

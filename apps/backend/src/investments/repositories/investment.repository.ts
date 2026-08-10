@@ -20,7 +20,7 @@ import type {
 export class InvestmentRepository {
   private readonly logger = new Logger(InvestmentRepository.name);
 
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService & Record<string, any>) {}
 
   // ─── Investment Product ───────────────────────────────────────────
 
@@ -106,7 +106,7 @@ export class InvestmentRepository {
     const limit = dto.limit ?? 20;
     const skip = (page - 1) * limit;
 
-    const where: Prisma.InvestmentProductWhereInput = {};
+    const where: Record<string, unknown> = {};
     if (dto.assetClass) where.assetClass = dto.assetClass as never;
     if (dto.status) where.status = dto.status as never;
     if (dto.search) {
@@ -187,7 +187,7 @@ export class InvestmentRepository {
           network?: string;
         },
   ) {
-    const where: Prisma.InvestmentCustodyWalletWhereInput = {};
+    const where: Record<string, unknown> = {};
 
     if (typeof filters === 'string') {
       where.productId = filters;
@@ -205,7 +205,7 @@ export class InvestmentRepository {
   }
 
   async findProducts(filters?: { assetClass?: string; status?: string; symbol?: string }) {
-    const where: Prisma.InvestmentProductWhereInput = {};
+    const where: Record<string, unknown> = {};
     if (filters?.assetClass) where.assetClass = filters.assetClass as never;
     if (filters?.status) where.status = filters.status as never;
     if (filters?.symbol) {
@@ -247,7 +247,7 @@ export class InvestmentRepository {
     const limit = dto.limit ?? 20;
     const skip = (page - 1) * limit;
 
-    const where: Prisma.InvestmentCustodyWalletWhereInput = {};
+    const where: Record<string, unknown> = {};
     if (dto.productId) where.productId = dto.productId;
     if (dto.network) where.network = { contains: dto.network, mode: 'insensitive' };
     if (dto.status) where.status = dto.status as never;
@@ -397,7 +397,7 @@ export class InvestmentRepository {
     const limit = dto.limit ?? 20;
     const skip = (page - 1) * limit;
 
-    const where: Prisma.InvestmentCustodyDepositWhereInput = {};
+    const where: Record<string, unknown> = {};
     if (dto.userId) where.userId = dto.userId;
     if (dto.status) where.status = dto.status as never;
     if (dto.productSymbol) where.product = { symbol: dto.productSymbol };
@@ -431,7 +431,7 @@ export class InvestmentRepository {
   }
 
   async findDeposits(userId?: string, limit = 50) {
-    const where: Prisma.InvestmentCustodyDepositWhereInput = {};
+    const where: Record<string, unknown> = {};
     if (userId) where.userId = userId;
     return this.prisma.investmentCustodyDeposit.findMany({
       where,
@@ -511,7 +511,7 @@ export class InvestmentRepository {
     const limit = dto.limit ?? 20;
     const skip = (page - 1) * limit;
 
-    const where: Prisma.InvestmentCustodyWithdrawalWhereInput = {};
+    const where: Record<string, unknown> = {};
     if (dto.userId) where.userId = dto.userId;
     if (dto.status) where.status = dto.status as never;
     if (dto.productSymbol) where.product = { symbol: dto.productSymbol };
@@ -545,7 +545,7 @@ export class InvestmentRepository {
   }
 
   async findWithdrawals(userId?: string, limit = 50) {
-    const where: Prisma.InvestmentCustodyWithdrawalWhereInput = {};
+    const where: Record<string, unknown> = {};
     if (userId) where.userId = userId;
     return this.prisma.investmentCustodyWithdrawal.findMany({
       where,

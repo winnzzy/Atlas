@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import type {
   ActiveSession,
   ConnectedDevice,
@@ -12,7 +13,6 @@ import type {
   UpdateCustomerProfileInput,
   UpdateCustomerSecurityInput,
 } from '@atlas/types';
-import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   mockAccessibilityPreferences,
@@ -50,6 +50,16 @@ type ProfileMetadataShape = {
     items?: ProfileActivityItem[];
   };
 };
+
+const DEFAULT_NOTIFICATION_TYPE = 'SYSTEM' as const;
+const DEFAULT_NOTIFICATION_CHANNEL = 'IN_APP' as const;
+const DEFAULT_NOTIFICATION_PREFERENCE_WHERE = {
+  userId_type_channel: {
+    userId: '',
+    type: DEFAULT_NOTIFICATION_TYPE,
+    channel: DEFAULT_NOTIFICATION_CHANNEL,
+  },
+} as const;
 
 type MutableMockState = {
   profile: CustomerProfile;
@@ -244,7 +254,13 @@ export class ProfileRepository {
         await this.ensureMockRecords(userId);
         const userSetting = await this.prisma.userSetting.findUnique({ where: { userId } });
         const notificationPreference = await this.prisma.notificationPreference.findUnique({
-          where: { userId },
+          where: {
+            userId_type_channel: {
+              userId,
+              type: DEFAULT_NOTIFICATION_TYPE,
+              channel: DEFAULT_NOTIFICATION_CHANNEL,
+            },
+          },
         });
         const metadata = await this.readCurrentMetadata(userId);
 
@@ -322,9 +338,17 @@ export class ProfileRepository {
         });
 
         await this.prisma.notificationPreference.upsert({
-          where: { userId },
+          where: {
+            userId_type_channel: {
+              userId,
+              type: DEFAULT_NOTIFICATION_TYPE,
+              channel: DEFAULT_NOTIFICATION_CHANNEL,
+            },
+          },
           create: {
             userId,
+            type: DEFAULT_NOTIFICATION_TYPE,
+            channel: DEFAULT_NOTIFICATION_CHANNEL,
             ...merged.notificationPreferences,
           },
           update: {
@@ -372,7 +396,13 @@ export class ProfileRepository {
         await this.ensureMockRecords(userId);
         const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
         const notificationPreference = await this.prisma.notificationPreference.findUnique({
-          where: { userId },
+          where: {
+            userId_type_channel: {
+              userId,
+              type: DEFAULT_NOTIFICATION_TYPE,
+              channel: DEFAULT_NOTIFICATION_CHANNEL,
+            },
+          },
         });
         const sessions = await this.prisma.userSession.findMany({
           where: { userId, deletedAt: null, isActive: true },
@@ -440,9 +470,17 @@ export class ProfileRepository {
         });
 
         await this.prisma.notificationPreference.upsert({
-          where: { userId },
+          where: {
+            userId_type_channel: {
+              userId,
+              type: DEFAULT_NOTIFICATION_TYPE,
+              channel: DEFAULT_NOTIFICATION_CHANNEL,
+            },
+          },
           create: {
             userId,
+            type: DEFAULT_NOTIFICATION_TYPE,
+            channel: DEFAULT_NOTIFICATION_CHANNEL,
             ...mockNotificationPreferences,
             loginAlerts: merged.loginAlertsEnabled,
           },
@@ -597,9 +635,17 @@ export class ProfileRepository {
     });
 
     await this.prisma.notificationPreference.upsert({
-      where: { userId },
+      where: {
+        userId_type_channel: {
+          userId,
+          type: DEFAULT_NOTIFICATION_TYPE,
+          channel: DEFAULT_NOTIFICATION_CHANNEL,
+        },
+      },
       create: {
         userId,
+        type: DEFAULT_NOTIFICATION_TYPE,
+        channel: DEFAULT_NOTIFICATION_CHANNEL,
         ...mockNotificationPreferences,
       },
       update: {},

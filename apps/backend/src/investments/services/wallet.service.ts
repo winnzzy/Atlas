@@ -113,13 +113,13 @@ export class WalletService {
 
   async getWalletsByProduct(productId: string): Promise<WalletResponseDto[]> {
     const wallets = await this.repository.findWalletsByProduct(productId);
-    return wallets.map((w) => this.mapper.toWalletResponseDto(w));
+    return wallets.map((w: unknown) => this.mapper.toWalletResponseDto(w as never));
   }
 
   async getActiveWalletForProduct(productId: string, network?: string): Promise<WalletResponseDto> {
     const wallets = await this.repository.findWalletsByProduct(productId);
     const active = wallets.find(
-      (w) => w.status === WalletStatus.ACTIVE && (!network || w.network === network),
+      (w: { status: WalletStatus; network: string }) => w.status === WalletStatus.ACTIVE && (!network || w.network === network),
     );
     if (!active) {
       throw InvestmentDomainException.walletNotFound(productId);
@@ -129,6 +129,6 @@ export class WalletService {
 
   async listWallets(filters?: { productId?: string; status?: string; network?: string }): Promise<WalletResponseDto[]> {
     const wallets = await this.repository.findWallets(filters);
-    return wallets.map((w) => this.mapper.toWalletResponseDto(w));
+    return wallets.map((w: unknown) => this.mapper.toWalletResponseDto(w as never));
   }
 }

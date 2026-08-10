@@ -35,7 +35,7 @@ export class DepositService {
     }
 
     const wallets = await this.repo.findWalletsByProduct(product.id);
-    const activeWallet = wallets.find((w) => w.status === 'ACTIVE');
+    const activeWallet = wallets.find((w: { status: string }) => w.status === 'ACTIVE');
     if (!activeWallet) {
       throw new AssetDisabledException(`No active wallet for ${dto.productSymbol}`);
     }
@@ -74,7 +74,7 @@ export class DepositService {
 
   async getDepositsByUser(userId: string): Promise<DepositResponseDto[]> {
     const deposits = await this.repo.findDepositsByUser(userId);
-    return deposits.map((d) => this.mapper.toDepositResponseDto(d));
+    return deposits.map((d: unknown) => this.mapper.toDepositResponseDto(d as never));
   }
 
   async requestDeposit(userId: string, dto: CreateDepositDto): Promise<DepositResponseDto> {
@@ -92,10 +92,10 @@ export class DepositService {
         productSymbol: filters?.productId,
         status: filters?.status as DepositStatus,
       });
-      return result.data.map((d) => this.mapper.toDepositResponseDto(d));
+      return result.data.map((d: unknown) => this.mapper.toDepositResponseDto(d as never));
     }
     const deposits = await this.repo.findDeposits(filters?.userId);
-    return deposits.map((d) => this.mapper.toDepositResponseDto(d));
+    return deposits.map((d: unknown) => this.mapper.toDepositResponseDto(d as never));
   }
 
   async searchDeposits(dto: SearchDepositsDto) {

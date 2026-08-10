@@ -123,7 +123,7 @@ export class AssetService {
 
   async listAssets(filters?: { assetClass?: string; status?: string; symbol?: string }): Promise<AssetResponseDto[]> {
     const products = await this.repository.findProducts(filters);
-    return products.map((p) => this.mapper.toAssetResponseDto(p));
+    return products.map((p: unknown) => this.mapper.toAssetResponseDto(p as never));
   }
 
   async enableAsset(productId: string, performedBy: string): Promise<AssetResponseDto> {

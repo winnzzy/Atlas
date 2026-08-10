@@ -114,6 +114,6 @@ export class PricingService {
     }
 
     const prices = await this.repository.findPriceHistory(productId);
-    return prices.map((p) => this.mapper.toPriceResponseDto(p));
+    return prices.map((p: unknown) => this.mapper.toPriceResponseDto(p as never));
   }
 }

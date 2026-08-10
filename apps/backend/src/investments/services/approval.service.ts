@@ -132,7 +132,7 @@ export class ApprovalService {
 
     // Update portfolio total value
     const positions = await this.repository.findPositionsByPortfolio(portfolio.id);
-    const totalValue = positions.reduce((sum, p) => sum + Number(p.currentValue), 0);
+    const totalValue = positions.reduce((sum: number, p: { currentValue: unknown }) => sum + Number(p.currentValue), 0);
     await this.repository.updatePortfolioValue(portfolio.id, totalValue);
 
     this.eventEmitter.emit(
@@ -268,7 +268,7 @@ export class ApprovalService {
 
     // Update portfolio total value
     const positions = await this.repository.findPositionsByPortfolio(portfolio.id);
-    const totalValue = positions.reduce((sum, p) => sum + Number(p.currentValue), 0);
+    const totalValue = positions.reduce((sum: number, p: { currentValue: unknown }) => sum + Number(p.currentValue), 0);
     await this.repository.updatePortfolioValue(portfolio.id, totalValue);
 
     this.eventEmitter.emit(

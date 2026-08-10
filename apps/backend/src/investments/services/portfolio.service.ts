@@ -94,7 +94,7 @@ export class PortfolioService {
     filters?: { productId?: string; type?: string },
   ): Promise<PortfolioTransactionResponseDto[]> {
     const entries = await this.repository.findPortfolioTransactions(userId);
-    const filtered = entries.filter((entry) => {
+    const filtered = entries.filter((entry: { productId?: string; type?: string }) => {
       if (filters?.productId && entry.productId !== filters.productId) {
         return false;
       }
@@ -104,6 +104,6 @@ export class PortfolioService {
       return true;
     });
 
-    return filtered.map((entry) => this.mapper.toPortfolioTransactionResponseDto(entry as never));
+    return filtered.map((entry: unknown) => this.mapper.toPortfolioTransactionResponseDto(entry as never));
   }
 }

@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@atlas/config": "workspace:*",
+    "@atlas/domain": "workspace:*",
     "@atlas/shared": "workspace:*",
     "@atlas/types": "workspace:*",
     "@nestjs/common": "^11.0.0",
