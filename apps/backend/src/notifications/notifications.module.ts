@@ -11,11 +11,13 @@ import { NotificationPreferencesService } from './services/notification-preferen
 import { NotificationTemplateService } from './services/notification-template.service';
 import { NotificationService } from './services/notification.service';
 import { NotificationValidator } from './validators/notification.validator';
+import { RolesGuard } from '../auth/guards/roles.guard';
 
 @Module({
   imports: [PrismaModule, AccountsModule],
   controllers: [NotificationController],
   providers: [
+    RolesGuard,
     NotificationEventHandler,
     NotificationMapper,
     NotificationPolicy,

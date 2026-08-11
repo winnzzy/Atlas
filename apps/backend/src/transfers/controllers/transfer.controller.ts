@@ -4,8 +4,7 @@ import { type AuthenticatedUser } from '../../accounts/policies/account.policy';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { TransferService } from '../services/transfer.service';
-import { CreateBeneficiaryDto } from '../dto/create-transfer.dto';
-import type { CreateTransferDto } from '../dto/create-transfer.dto';
+import { CreateBeneficiaryDto, CreateTransferDto } from '../dto/create-transfer.dto';
 import { SearchTransfersDto } from '../dto/search-transfers.dto';
 import { BeneficiaryResponseDto, BeneficiarySearchResponseDto, TransferResponseDto, TransferSearchResponseDto } from '../dto/transfer-response.dto';
 
@@ -21,13 +20,9 @@ export class TransferController {
   @ApiOperation({ summary: 'Create a transfer' })
   @ApiResponse({ status: HttpStatus.CREATED, type: TransferResponseDto })
   createTransfer(
-    @CurrentUser() userOrDto: AuthenticatedUser | CreateTransferDto,
-    @Body() dto?: CreateTransferDto,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: CreateTransferDto,
   ): Promise<TransferResponseDto> {
-    if (!dto) {
-      return this.transferService.createTransfer({ id: 'system', role: 'ADMIN' } as AuthenticatedUser, userOrDto as CreateTransferDto);
-    }
-    const user = userOrDto as AuthenticatedUser;
     return this.transferService.createTransfer(user, dto);
   }
 

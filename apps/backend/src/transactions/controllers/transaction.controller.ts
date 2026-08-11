@@ -22,9 +22,8 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { TransactionService } from '../services/transaction.service';
-import type { CreateTransactionDto } from '../dto/create-transaction.dto';
-import { StatementExportDto } from '../dto/search-transactions.dto';
-import type { SearchTransactionsDto } from '../dto/search-transactions.dto';
+import { CreateTransactionDto } from '../dto/create-transaction.dto';
+import { SearchTransactionsDto, StatementExportDto } from '../dto/search-transactions.dto';
 import { TransactionResponseDto, TransactionSearchResponseDto, StatementResponseDto } from '../dto/transaction-response.dto';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -60,13 +59,9 @@ export class TransactionController {
   @ApiResponse({ status: HttpStatus.CONFLICT, description: 'Duplicate reference or idempotency key' })
   @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Policy violation' })
   async createTransaction(
-    @CurrentUser() userOrDto: AuthenticatedUser | CreateTransactionDto,
-    @Body() dto?: CreateTransactionDto,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: CreateTransactionDto,
   ): Promise<TransactionResponseDto> {
-    if (!dto) {
-      return this.transactionService.createTransaction(userOrDto as CreateTransactionDto);
-    }
-    const user = userOrDto as AuthenticatedUser;
     return this.transactionService.createTransactionForUser(user, dto);
   }
 
@@ -85,13 +80,9 @@ export class TransactionController {
     type: TransactionSearchResponseDto,
   })
   async searchTransactions(
-    @CurrentUser() userOrDto: AuthenticatedUser | SearchTransactionsDto,
-    @Query() dto?: SearchTransactionsDto,
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() dto: SearchTransactionsDto,
   ): Promise<TransactionSearchResponseDto> {
-    if (!dto) {
-      return this.transactionService.searchTransactions(userOrDto as SearchTransactionsDto);
-    }
-    const user = userOrDto as AuthenticatedUser;
     return this.transactionService.searchTransactionsForUser(user, dto);
   }
 
@@ -111,13 +102,9 @@ export class TransactionController {
   })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'Transaction not found' })
   async getTransaction(
-    @CurrentUser() userOrId: AuthenticatedUser | string,
-    @Param('id') id?: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
   ): Promise<TransactionResponseDto> {
-    if (!id) {
-      return this.transactionService.getTransaction(userOrId as string);
-    }
-    const user = userOrId as AuthenticatedUser;
     return this.transactionService.getTransactionForUser(user, id);
   }
 

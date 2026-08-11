@@ -6,8 +6,11 @@ import { TransactionStatus } from '../../enums/transaction-status.enum';
 
 const serviceMock = {
   createTransaction: jest.fn(),
+  createTransactionForUser: jest.fn(),
   searchTransactions: jest.fn(),
+  searchTransactionsForUser: jest.fn(),
   getTransaction: jest.fn(),
+  getTransactionForUser: jest.fn(),
   cancelTransaction: jest.fn(),
   reverseTransaction: jest.fn(),
   getAccountTransactions: jest.fn(),
@@ -67,45 +70,54 @@ describe('TransactionController', () => {
     controller = module.get(TransactionController);
   });
 
-  it('creates a transaction', async () => {
-    serviceMock.createTransaction.mockResolvedValue(makeTransaction() as never);
+  it('creates a transaction scoped to the authenticated user', async () => {
+    serviceMock.createTransactionForUser.mockResolvedValue(makeTransaction() as never);
 
-    const result = await controller.createTransaction({
+    const user = { id: 'user-1' } as never;
+    const dto = {
       type: TransactionType.DEPOSIT,
       accountId: 'acct-1',
       amount: '100.00',
       currency: 'USD',
       idempotencyKey: 'idem-key-1',
       description: 'Test deposit',
-    } as never);
+    } as never;
+    const result = await controller.createTransaction(user, dto);
 
-    expect(serviceMock.createTransaction).toHaveBeenCalledTimes(1);
+    expect(serviceMock.createTransactionForUser).toHaveBeenCalledWith(user, dto);
+    // The unscoped variant skips ownership checks and must never be reachable.
+    expect(serviceMock.createTransaction).not.toHaveBeenCalled();
     expect(result.status).toBe(TransactionStatus.COMPLETED);
     expect(result.amount).toBe('100.00');
   });
 
   it('searches transactions', async () => {
-    serviceMock.searchTransactions.mockResolvedValue({
+    serviceMock.searchTransactionsForUser.mockResolvedValue({
       items: [makeTransaction()],
       nextCursor: undefined,
       totalCount: 1,
       limit: 20,
     } as never);
 
-    const result = await controller.searchTransactions({ type: TransactionType.DEPOSIT } as never);
+    const user = { id: 'user-1' } as never;
+    const query = { type: TransactionType.DEPOSIT } as never;
+    const result = await controller.searchTransactions(user, query);
 
-    expect(serviceMock.searchTransactions).toHaveBeenCalledTimes(1);
+    expect(serviceMock.searchTransactionsForUser).toHaveBeenCalledWith(user, query);
+    expect(serviceMock.searchTransactions).not.toHaveBeenCalled();
     expect(result.items).toHaveLength(1);
     expect(result.totalCount).toBe(1);
   });
 
-  it('gets a transaction by id', async () => {
-    serviceMock.getTransaction.mockResolvedValue(makeTransaction() as never);
+  it('gets a transaction by id scoped to the authenticated user', async () => {
+    serviceMock.getTransactionForUser.mockResolvedValue(makeTransaction() as never);
 
-    const result = await controller.getTransaction('txn-1');
+    const user = { id: 'user-1' } as never;
+    const result = await controller.getTransaction(user, 'txn-1');
 
     expect(result.id).toBe('txn-1');
-    expect(serviceMock.getTransaction).toHaveBeenCalledWith('txn-1');
+    expect(serviceMock.getTransactionForUser).toHaveBeenCalledWith(user, 'txn-1');
+    expect(serviceMock.getTransaction).not.toHaveBeenCalled();
   });
 
   it('cancels a transaction', async () => {

@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { NotificationChannel, NotificationPriority, NotificationType } from '@prisma/client';
@@ -13,10 +13,16 @@ import { NotificationController } from '../notification.controller';
 describe('NotificationController', () => {
   const notificationService = {
     search: jest.fn(),
+    searchForUser: jest.fn(),
     getById: jest.fn(),
+    getByIdForUser: jest.fn(),
     markRead: jest.fn(),
+    markReadForUser: jest.fn(),
     cancel: jest.fn(),
+    cancelForUser: jest.fn(),
   };
+
+  const user = { id: 'user-1', email: 'user-1@atlas.test' } as never;
 
   const preferencesService = {
     getPreferences: jest.fn(),
@@ -51,45 +57,50 @@ describe('NotificationController', () => {
     expect(keys.some((key) => key.includes('swagger/apiSecurity'))).toBe(true);
   });
 
-  it('handles search endpoint success', async () => {
-    notificationService.search.mockResolvedValue({ items: [], total: 0, limit: 50, offset: 0 });
+  it('scopes the search to the authenticated recipient', async () => {
+    notificationService.searchForUser.mockResolvedValue({ items: [], total: 0, limit: 50, offset: 0 });
 
-    const result = await controller.search({ limit: 10, offset: 0 });
+    const result = await controller.search(user, { limit: 10, offset: 0 });
 
     expect(result.total).toBe(0);
-    expect(notificationService.search).toHaveBeenCalledWith({ limit: 10, offset: 0 });
+    expect(notificationService.searchForUser).toHaveBeenCalledWith('user-1', { limit: 10, offset: 0 });
+    // The unscoped search would return every user's notifications.
+    expect(notificationService.search).not.toHaveBeenCalled();
   });
 
   it('handles get by id success and not found error', async () => {
-    notificationService.getById.mockResolvedValueOnce({ id: 'notif-1' });
-    notificationService.getById.mockRejectedValueOnce(new NotFoundException('Notification not found'));
+    notificationService.getByIdForUser.mockResolvedValueOnce({ id: 'notif-1' });
+    notificationService.getByIdForUser.mockRejectedValueOnce(new NotFoundException('Notification not found'));
 
-    await expect(controller.getById('notif-1')).resolves.toEqual({ id: 'notif-1' });
-    await expect(controller.getById('missing')).rejects.toThrow(NotFoundException);
+    await expect(controller.getById(user, 'notif-1')).resolves.toEqual({ id: 'notif-1' });
+    await expect(controller.getById(user, 'missing')).rejects.toThrow(NotFoundException);
+    expect(notificationService.getById).not.toHaveBeenCalled();
   });
 
   it('handles mark read and cancel endpoints', async () => {
-    notificationService.markRead.mockResolvedValue({ id: 'notif-1', status: 'READ' });
-    notificationService.cancel.mockResolvedValue({ id: 'notif-1', status: 'CANCELLED' });
+    notificationService.markReadForUser.mockResolvedValue({ id: 'notif-1', status: 'READ' });
+    notificationService.cancelForUser.mockResolvedValue({ id: 'notif-1', status: 'CANCELLED' });
 
-    const readResult = await controller.markRead('notif-1');
-    const cancelResult = await controller.cancel('notif-1');
+    const readResult = await controller.markRead(user, 'notif-1');
+    const cancelResult = await controller.cancel(user, 'notif-1');
 
     expect(readResult.status).toBe('READ');
     expect(cancelResult.status).toBe('CANCELLED');
+    expect(notificationService.markReadForUser).toHaveBeenCalledWith('user-1', 'notif-1');
+    expect(notificationService.cancelForUser).toHaveBeenCalledWith('user-1', 'notif-1');
   });
 
   it('handles preference endpoints success and error', async () => {
     preferencesService.getPreferences.mockResolvedValue([{ id: 'pref-1' }]);
     mapper.toPreferenceDto.mockReturnValue({ id: 'pref-1' });
 
-    const list = await controller.getPreferences('user-1');
+    const list = await controller.getPreferences(user, 'user-1');
     expect(list).toEqual([{ id: 'pref-1' }]);
 
     preferencesService.updatePreference.mockResolvedValue({ id: 'pref-2' });
     mapper.toPreferenceDto.mockReturnValueOnce({ id: 'pref-2' });
 
-    const updated = await controller.updatePreference('user-1', {
+    const updated = await controller.updatePreference(user, 'user-1', {
       type: NotificationType.SECURITY,
       channel: NotificationChannel.EMAIL,
       enabled: true,
@@ -99,7 +110,7 @@ describe('NotificationController', () => {
 
     preferencesService.updatePreference.mockRejectedValueOnce(new Error('bad preference'));
     await expect(
-      controller.updatePreference('user-1', {
+      controller.updatePreference(user, 'user-1', {
         type: NotificationType.SECURITY,
         channel: NotificationChannel.EMAIL,
         enabled: true,
@@ -107,11 +118,24 @@ describe('NotificationController', () => {
     ).rejects.toThrow('bad preference');
   });
 
+  it('rejects reading another customer preferences', async () => {
+    await expect(controller.getPreferences(user, 'user-2')).rejects.toThrow(ForbiddenException);
+    await expect(
+      controller.updatePreference(user, 'user-2', {
+        type: NotificationType.SECURITY,
+        channel: NotificationChannel.EMAIL,
+        enabled: true,
+      }),
+    ).rejects.toThrow(ForbiddenException);
+    expect(preferencesService.getPreferences).not.toHaveBeenCalled();
+    expect(preferencesService.updatePreference).not.toHaveBeenCalled();
+  });
+
   it('handles template endpoints success and error', async () => {
     templateService.listTemplates.mockResolvedValue([{ id: 'tpl-1' }]);
     mapper.toTemplateDto.mockReturnValue({ id: 'tpl-1' });
 
-    const templates = await controller.listTemplates();
+    const templates = await controller.listTemplatesCatalog();
     expect(templates).toEqual([{ id: 'tpl-1' }]);
 
     templateService.createOrUpdateTemplate.mockResolvedValue({ id: 'tpl-2' });

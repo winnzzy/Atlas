@@ -1,4 +1,4 @@
-import { getAccounts, getCards, getNotifications, getTransactions, getTransfers, getInvestments, getProfile } from '@/lib/api';
+import { getAccounts, getCards, getNotifications, getTransactions, getTransfers, getPortfolio, getProfile } from '@/lib/api';
 
 export type DashboardAccount = {
   id: string;
@@ -122,14 +122,12 @@ type ApiNotification = {
   createdAt?: string;
 };
 
-type ApiInvestment = {
+type ApiHolding = {
+  productId?: string;
+  symbol?: string;
   name?: string;
-  assetName?: string;
-  weight?: string;
-  allocation?: string;
-  value?: number | string;
-  marketValue?: number | string;
-  balance?: number | string;
+  allocationPct?: number;
+  currentValue?: number;
 };
 
 function parseBalance(value: unknown): number {
@@ -141,15 +139,24 @@ function parseBalance(value: unknown): number {
   return 0;
 }
 
+/** Resolves to null instead of rejecting, so one failing section cannot blank the dashboard. */
+async function settle<T>(promise: Promise<T>): Promise<T | null> {
+  try {
+    return await promise;
+  } catch {
+    return null;
+  }
+}
+
 export async function loadDashboardData() {
   const [accountsResponse, transactionsResponse, transfersResponse, cardsResponse, notificationsResponse, investmentsResponse, profileResponse] = await Promise.all([
-    getAccounts(),
-    getTransactions(),
-    getTransfers(),
-    getCards(),
-    getNotifications(),
-    getInvestments(),
-    getProfile(),
+    settle(getAccounts()),
+    settle(getTransactions()),
+    settle(getTransfers()),
+    settle(getCards()),
+    settle(getNotifications()),
+    settle(getPortfolio()),
+    settle(getProfile()),
   ]);
 
   const accounts = Array.isArray(accountsResponse)
@@ -208,13 +215,12 @@ export async function loadDashboardData() {
       }))
     : [];
 
-  const portfolio = Array.isArray(investmentsResponse)
-    ? investmentsResponse.map((item: ApiInvestment): DashboardPortfolioItem => ({
-        name: item.name ?? item.assetName ?? 'Investment',
-        weight: item.weight ?? item.allocation ?? '0%',
-        value: parseBalance(item.value ?? item.marketValue ?? item.balance),
-      }))
-    : [];
+  const holdings = investmentsResponse?.holdings ?? [];
+  const portfolio = holdings.map((item: ApiHolding): DashboardPortfolioItem => ({
+    name: item.name ?? item.symbol ?? 'Investment',
+    weight: `${(item.allocationPct ?? 0).toFixed(1)}%`,
+    value: parseBalance(item.currentValue),
+  }));
 
   const profile = profileResponse ? {
     id: profileResponse.id ?? 'unknown',

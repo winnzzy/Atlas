@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
@@ -8,6 +9,7 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -24,13 +26,18 @@ import {
   NotificationTemplateResponseDto,
 } from '../dto';
 import { CreateNotificationTemplateDto, PreviewNotificationTemplateDto, SearchNotificationsDto, UpdateNotificationPreferenceDto } from '../dto';
-import { NotificationMapper } from '../mappers/notification.mapper'; // eslint-disable-line @typescript-eslint/consistent-type-imports
-import { NotificationPreferencesService } from '../services/notification-preferences.service'; // eslint-disable-line @typescript-eslint/consistent-type-imports
-import { NotificationService } from '../services/notification.service'; // eslint-disable-line @typescript-eslint/consistent-type-imports
-import { NotificationTemplateService } from '../services/notification-template.service'; // eslint-disable-line @typescript-eslint/consistent-type-imports
+import { NotificationMapper } from '../mappers/notification.mapper';
+import { NotificationPreferencesService } from '../services/notification-preferences.service';
+import { NotificationService } from '../services/notification.service';
+import { NotificationTemplateService } from '../services/notification-template.service';
+import { CurrentUser, type AuthenticatedUser } from '../../auth/decorators/current-user.decorator';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
 
 @ApiTags('Notifications')
 @ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('notifications')
 export class NotificationController {
   constructor(
@@ -43,38 +50,62 @@ export class NotificationController {
   @Get()
   @ApiOperation({ summary: 'Search notifications' })
   @ApiResponse({ status: HttpStatus.OK, type: NotificationSearchResponseDto })
-  async search(@Query() query: SearchNotificationsDto): Promise<NotificationSearchResponseDto> {
-    return this.notificationService.search(query);
+  async search(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: SearchNotificationsDto,
+  ): Promise<NotificationSearchResponseDto> {
+    return this.notificationService.searchForUser(user.id, query);
+  }
+
+  @Get('templates/catalog')
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @ApiOperation({ summary: 'List notification templates' })
+  @ApiResponse({ status: HttpStatus.OK, type: [NotificationTemplateResponseDto] })
+  async listTemplatesCatalog(): Promise<NotificationTemplateResponseDto[]> {
+    return this.listTemplates();
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get notification by ID' })
   @ApiParam({ name: 'id', description: 'Notification ID' })
   @ApiResponse({ status: HttpStatus.OK, type: NotificationResponseDto })
-  async getById(@Param('id') id: string): Promise<NotificationResponseDto> {
-    return this.notificationService.getById(id);
+  async getById(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ): Promise<NotificationResponseDto> {
+    return this.notificationService.getByIdForUser(user.id, id);
   }
 
   @Patch(':id/read')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Mark notification as read' })
   @ApiResponse({ status: HttpStatus.OK, type: NotificationResponseDto })
-  async markRead(@Param('id') id: string): Promise<NotificationResponseDto> {
-    return this.notificationService.markRead(id);
+  async markRead(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ): Promise<NotificationResponseDto> {
+    return this.notificationService.markReadForUser(user.id, id);
   }
 
   @Patch(':id/cancel')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Cancel notification delivery' })
   @ApiResponse({ status: HttpStatus.OK, type: NotificationResponseDto })
-  async cancel(@Param('id') id: string): Promise<NotificationResponseDto> {
-    return this.notificationService.cancel(id);
+  async cancel(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ): Promise<NotificationResponseDto> {
+    return this.notificationService.cancelForUser(user.id, id);
   }
 
   @Get('preferences/:userId')
   @ApiOperation({ summary: 'List notification preferences for a customer' })
   @ApiResponse({ status: HttpStatus.OK, type: [NotificationPreferenceResponseDto] })
-  async getPreferences(@Param('userId') userId: string): Promise<NotificationPreferenceResponseDto[]> {
+  async getPreferences(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('userId') userId: string,
+  ): Promise<NotificationPreferenceResponseDto[]> {
+    this.assertSelf(user, userId);
     const preferences = await this.preferencesService.getPreferences(userId);
     return preferences.map((preference) => this.mapper.toPreferenceDto(preference));
   }
@@ -84,22 +115,28 @@ export class NotificationController {
   @ApiOperation({ summary: 'Update a notification preference' })
   @ApiResponse({ status: HttpStatus.OK, type: NotificationPreferenceResponseDto })
   async updatePreference(
+    @CurrentUser() user: AuthenticatedUser,
     @Param('userId') userId: string,
     @Body() body: UpdateNotificationPreferenceDto,
   ): Promise<NotificationPreferenceResponseDto> {
+    this.assertSelf(user, userId);
     const preference = await this.preferencesService.updatePreference(userId, body);
     return this.mapper.toPreferenceDto(preference);
   }
 
-  @Get('templates/catalog')
-  @ApiOperation({ summary: 'List notification templates' })
-  @ApiResponse({ status: HttpStatus.OK, type: [NotificationTemplateResponseDto] })
-  async listTemplates(): Promise<NotificationTemplateResponseDto[]> {
+  private assertSelf(user: AuthenticatedUser, userId: string): void {
+    if (user.id !== userId) {
+      throw new ForbiddenException('You may only manage your own notification preferences');
+    }
+  }
+
+  private async listTemplates(): Promise<NotificationTemplateResponseDto[]> {
     const templates = await this.templateService.listTemplates();
     return templates.map((template) => this.mapper.toTemplateDto(template));
   }
 
   @Post('templates')
+  @Roles('ADMIN', 'SUPER_ADMIN')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Create or update a notification template' })
   @ApiResponse({ status: HttpStatus.OK, type: NotificationTemplateResponseDto })
@@ -111,6 +148,7 @@ export class NotificationController {
   }
 
   @Post('templates/preview')
+  @Roles('ADMIN', 'SUPER_ADMIN')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Preview a notification template' })
   @ApiResponse({ status: HttpStatus.OK, type: NotificationPreviewResponseDto })

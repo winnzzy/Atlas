@@ -25,11 +25,17 @@ const ACTION_MIN_ROLE: Record<string, AdminRole> = {
   'transfer.manage': 'OPERATIONS',
   'transaction.manage': 'FINANCE',
   'notification.manage': 'SUPPORT',
-  'demo.manage': 'ADMIN',
 };
 
 @Injectable()
 export class AdminPolicy {
+  /** Actions the role may perform, so clients can hide what would 403. */
+  permittedActions(role: AdminRole): string[] {
+    return Object.keys(ACTION_MIN_ROLE).filter(
+      (action) => ROLE_RANK[role] >= ROLE_RANK[ACTION_MIN_ROLE[action] as AdminRole],
+    );
+  }
+
   assertAllowed(role: AdminRole, action: string): void {
     const minRole = ACTION_MIN_ROLE[action];
     if (!minRole) {

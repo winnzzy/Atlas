@@ -27,6 +27,9 @@ import { PortfolioService } from './services/portfolio.service';
 // Controllers
 import { InvestmentController } from './controllers/investment.controller';
 
+// Guards
+import { RolesGuard } from '../auth/guards/roles.guard';
+
 @Module({
   imports: [
     PrismaModule,
@@ -35,6 +38,7 @@ import { InvestmentController } from './controllers/investment.controller';
   ],
   controllers: [InvestmentController],
   providers: [
+    RolesGuard,
     // Core
     InvestmentRepository,
     InvestmentMapper,

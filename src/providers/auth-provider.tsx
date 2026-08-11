@@ -2,17 +2,25 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getProfile, getStoredAccessToken, setStoredAccessToken, logoutSession, loginWithEmailPassword } from '@/lib/api';
+import {
+  getAdminIdentity,
+  getProfile,
+  getStoredAccessToken,
+  setStoredAccessToken,
+  logoutSession,
+  loginWithEmailPassword,
+  type AdminIdentity,
+} from '@/lib/api';
 
 type AuthUser = {
   id: string;
   name: string;
   email: string;
-  role: 'CUSTOMER' | 'SUPER_ADMIN';
 };
 
 type AuthContextValue = {
   user: AuthUser | null;
+  admin: AdminIdentity | null;
   isAuthenticated: boolean;
   isAdmin: boolean;
   login: (email: string, password: string) => Promise<boolean>;
@@ -41,20 +49,30 @@ function mapProfileToUser(profile: ProfileResponse | null | undefined): AuthUser
   const firstName = profile.personalInformation?.firstName ?? '';
   const lastName = profile.personalInformation?.lastName ?? '';
   const email = profile.contactInformation?.email ?? '';
-  const role = profile.personalInformation?.firstName?.toLowerCase() === 'sarah' ? 'SUPER_ADMIN' : 'CUSTOMER';
 
   return {
     id: profile.id ?? 'unknown',
     name: [firstName, lastName].filter(Boolean).join(' ') || email || 'Atlas User',
     email,
-    role,
   };
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [admin, setAdmin] = useState<AdminIdentity | null>(null);
   const [ready, setReady] = useState(false);
   const router = useRouter();
+
+  // The admin grant is resolved server-side against the admin_users table; the
+  // client only mirrors the answer.
+  const loadSession = async () => {
+    const profile = await getProfile();
+    const nextUser = mapProfileToUser(profile);
+    const nextAdmin = await getAdminIdentity();
+    setUser(nextUser);
+    setAdmin(nextAdmin);
+    return { nextUser, nextAdmin };
+  };
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -65,12 +83,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        const profile = await getProfile();
-        const nextUser = mapProfileToUser(profile);
-        setUser(nextUser);
+        await loadSession();
       } catch {
         setStoredAccessToken(null);
         setUser(null);
+        setAdmin(null);
       } finally {
         setReady(true);
       }
@@ -88,14 +105,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       setStoredAccessToken(accessToken);
-      const profile = await getProfile();
-      const nextUser = mapProfileToUser(profile);
-      setUser(nextUser);
-      router.replace(nextUser?.role === 'SUPER_ADMIN' ? '/admin' : '/dashboard');
+      const { nextAdmin } = await loadSession();
+      router.replace(nextAdmin ? '/admin' : '/dashboard');
       return true;
     } catch {
       setStoredAccessToken(null);
       setUser(null);
+      setAdmin(null);
       return false;
     }
   };
@@ -109,19 +125,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     setStoredAccessToken(null);
     setUser(null);
+    setAdmin(null);
     router.replace('/login');
   };
 
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
+      admin,
       isAuthenticated: Boolean(user),
-      isAdmin: user?.role === 'SUPER_ADMIN',
+      isAdmin: Boolean(admin),
       login,
       logout,
       ready,
     }),
-    [user, ready],
+    [user, admin, ready],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

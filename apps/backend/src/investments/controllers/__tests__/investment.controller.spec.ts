@@ -10,6 +10,8 @@ import { ApprovalService } from '../../services/approval.service';
 import { PortfolioService } from '../../services/portfolio.service';
 import { AssetStatus, DepositStatus, WithdrawalStatus, WalletStatus } from '../../enums/investment-status.enum';
 import { ROLES_KEY } from '../../../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../../auth/guards/roles.guard';
 
 describe('InvestmentController', () => {
   let controller: InvestmentController;
@@ -179,7 +181,13 @@ describe('InvestmentController', () => {
         { provide: ApprovalService, useValue: mockApprovalService },
         { provide: PortfolioService, useValue: mockPortfolioService },
       ],
-    }).compile();
+    })
+      // These specs call handlers directly; guard behaviour is covered separately.
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(RolesGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get(InvestmentController);
     assetService = module.get(AssetService) as jest.Mocked<AssetService>;

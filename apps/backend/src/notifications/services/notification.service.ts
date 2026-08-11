@@ -99,9 +99,26 @@ export class NotificationService {
     };
   }
 
+  /** Search restricted to the caller's own notifications. */
+  async searchForUser(userId: string, dto: SearchNotificationsDto): Promise<NotificationSearchResponseDto> {
+    // recipientId is forced, so a caller cannot widen the query to another user.
+    return this.search({ ...dto, recipientId: userId });
+  }
+
   async getById(id: string): Promise<NotificationResponseDto> {
     const notification = await this.repository.findNotificationById(id);
     if (!notification) {
+      throw new NotFoundException('Notification not found');
+    }
+
+    return this.mapper.toNotificationDto(notification);
+  }
+
+  /** Resolves a notification only when the caller is its recipient. */
+  async getByIdForUser(userId: string, id: string): Promise<NotificationResponseDto> {
+    const notification = await this.repository.findNotificationById(id);
+    if (!notification || notification.userId !== userId) {
+      // Report not-found rather than forbidden so IDs cannot be probed.
       throw new NotFoundException('Notification not found');
     }
 
@@ -113,9 +130,19 @@ export class NotificationService {
     return this.getById(id);
   }
 
+  async markReadForUser(userId: string, id: string): Promise<NotificationResponseDto> {
+    await this.getByIdForUser(userId, id);
+    return this.markRead(id);
+  }
+
   async cancel(id: string): Promise<NotificationResponseDto> {
     await this.repository.updateNotificationStatus(id, DeliveryStatus.CANCELLED);
     return this.getById(id);
+  }
+
+  async cancelForUser(userId: string, id: string): Promise<NotificationResponseDto> {
+    await this.getByIdForUser(userId, id);
+    return this.cancel(id);
   }
 
   private errorMessage(error: unknown): string {

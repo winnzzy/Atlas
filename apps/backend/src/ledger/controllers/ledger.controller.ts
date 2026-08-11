@@ -8,6 +8,7 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -22,9 +23,18 @@ import { CreateHoldDto, ReleaseHoldDto } from '../dto/hold.dto';
 import { ReverseJournalDto } from '../dto/reverse-journal.dto';
 import { BalanceQueryDto } from '../dto/balance-query.dto';
 import { CreateReconciliationDto } from '../dto/reconciliation.dto';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
 
+/**
+ * Direct ledger access is an operations surface: posting a journal moves money
+ * without any product-level check, so every route here requires an admin grant.
+ */
 @ApiTags('Ledger')
 @ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('ADMIN', 'SUPER_ADMIN')
 @Controller('ledger')
 export class LedgerController {
   constructor(private readonly ledgerService: LedgerService) {}

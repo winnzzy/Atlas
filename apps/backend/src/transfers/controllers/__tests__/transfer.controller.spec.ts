@@ -31,14 +31,18 @@ describe('TransferController', () => {
     }).compile();
     const controller = module.get(TransferController);
 
-    const result = await controller.createTransfer({
+    const user = { id: 'user-1' } as never;
+    const dto = {
       type: TransferType.INTERNAL,
       sourceAccountId: '11111111-1111-1111-1111-111111111111',
       destinationAccountId: '22222222-2222-2222-2222-222222222222',
       amount: '10.00',
       currency: 'USD',
-    } as never);
+    } as never;
+    const result = await controller.createTransfer(user, dto);
 
     expect(result.status).toBe(TransferStatus.COMPLETED);
+    // The authenticated principal must reach the service; it scopes ownership.
+    expect(serviceMock.createTransfer).toHaveBeenCalledWith(user, dto);
   });
 });

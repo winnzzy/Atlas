@@ -18,6 +18,18 @@ export class AdminDashboardController {
     private readonly policy: AdminPolicy,
   ) {}
 
+  @Get('me')
+  @ApiOperation({ summary: 'Resolve the calling admin identity and permissions' })
+  @ApiResponse({ status: 200, type: Object })
+  getIdentity(
+    @Headers('x-admin-role') role: AdminRole,
+    @Headers('x-admin-id') adminId: string,
+  ): { adminId: string; role: AdminRole; permissions: string[] } {
+    // The guard resolves both headers from the database and overwrites whatever
+    // the client sent, so this reflects the stored role assignment.
+    return { adminId, role, permissions: this.policy.permittedActions(role) };
+  }
+
   @Get('overview')
   @ApiOperation({ summary: 'Get admin dashboard overview' })
   @ApiResponse({ status: 200, type: AdminDashboardOverviewDto })
