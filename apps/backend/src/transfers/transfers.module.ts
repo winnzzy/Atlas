@@ -7,13 +7,14 @@ import { TransferController } from './controllers/transfer.controller';
 import { TransferMapper } from './mappers/transfer.mapper';
 import { TransferPolicy } from './policies/transfer.policy';
 import { TransferRepository } from './repositories/transfer.repository';
+import { BankDirectoryService } from './services/bank-directory.service';
 import { TransferService } from './services/transfer.service';
 import { TransferValidator } from './validators/transfer.validator';
 
 @Module({
   imports: [EventEmitterModule.forRoot(), PrismaModule, AccountsModule, TransactionsModule],
   controllers: [TransferController],
-  providers: [TransferService, TransferRepository, TransferPolicy, TransferValidator, TransferMapper],
-  exports: [TransferService, TransferRepository, TransferPolicy, TransferValidator, TransferMapper],
+  providers: [TransferService, TransferRepository, TransferPolicy, TransferValidator, TransferMapper, BankDirectoryService],
+  exports: [TransferService, TransferRepository, TransferPolicy, TransferValidator, TransferMapper, BankDirectoryService],
 })
 export class TransfersModule {}

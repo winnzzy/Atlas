@@ -7,53 +7,122 @@ import { TransferValidator } from '../../validators/transfer.validator';
 import { TransferMapper } from '../../mappers/transfer.mapper';
 import { AccountService } from '../../../accounts/services/account.service';
 import { TransactionService } from '../../../transactions/services/transaction.service';
+import { PrismaService } from '../../../prisma/prisma.service';
 import { TransferType } from '../../enums/transfer-type.enum';
+import { TransferPolicyViolationException } from '../../exceptions/transfer-domain.exception';
+
+type Overrides = {
+  account?: { status?: string; availableBalance?: string };
+  kycStatus?: string;
+  isHolder?: boolean;
+};
+
+function buildModule(overrides: Overrides = {}) {
+  const transfers = new Map<string, Parameters<TransferRepository['saveTransfer']>[0]>();
+  const accountService = {
+    findById: jest.fn().mockResolvedValue({
+      status: overrides.account?.status ?? 'ACTIVE',
+      availableBalance: overrides.account?.availableBalance ?? '100.00',
+    }),
+    isAccountHolder: jest.fn().mockResolvedValue(overrides.isHolder ?? true),
+  };
+  const transactionService = {
+    createTransaction: jest.fn().mockResolvedValue({ id: 'txn-1', reference: 'TXN-1' }),
+  };
+  const transferRepository = {
+    findByIdempotencyKey: jest.fn().mockResolvedValue(null),
+    existsByReference: jest.fn().mockResolvedValue(false),
+    findBeneficiaryById: jest.fn().mockResolvedValue(null),
+    saveTransfer: jest.fn(async (record) => {
+      transfers.set(record.id, { ...record });
+      return record;
+    }),
+    updateTransfer: jest.fn(async (record) => {
+      transfers.set(record.id, { ...record });
+      return record;
+    }),
+    findById: jest.fn(async (id) => transfers.get(id) ?? null),
+  };
+  const prisma = {
+    user: {
+      findUnique: jest.fn().mockResolvedValue({ kycStatus: overrides.kycStatus ?? 'APPROVED' }),
+    },
+  };
+
+  return Test.createTestingModule({
+    providers: [
+      TransferService,
+      { provide: TransferRepository, useValue: transferRepository },
+      TransferPolicy,
+      TransferValidator,
+      TransferMapper,
+      { provide: AccountService, useValue: accountService },
+      { provide: TransactionService, useValue: transactionService },
+      { provide: PrismaService, useValue: prisma },
+      { provide: EventEmitter2, useValue: { emit: jest.fn() } },
+    ],
+  }).compile();
+}
+
+const INTERNAL_DTO = {
+  type: TransferType.INTERNAL,
+  sourceAccountId: '11111111-1111-1111-1111-111111111111',
+  destinationAccountId: '22222222-2222-2222-2222-222222222222',
+  amount: '10.00',
+  currency: 'USD',
+};
 
 describe('TransferService', () => {
-  it('creates an immediate internal transfer using the transaction engine', async () => {
-    const transfers = new Map<string, Parameters<TransferRepository['saveTransfer']>[0]>();
-    const accountService = {
-      findById: jest.fn().mockResolvedValue({ status: 'ACTIVE', availableBalance: '100.00' }),
-      isAccountHolder: jest.fn().mockResolvedValue(true),
+  it('creates an immediate internal transfer for a KYC-approved customer', async () => {
+    const module = await buildModule({ kycStatus: 'APPROVED' });
+    const transactionService = module.get(TransactionService) as unknown as {
+      createTransaction: jest.Mock;
     };
-    const transactionService = { createTransaction: jest.fn().mockResolvedValue({ id: 'txn-1', reference: 'TXN-1' }) };
-    const transferRepository = {
-      findByIdempotencyKey: jest.fn().mockResolvedValue(null),
-      existsByReference: jest.fn().mockResolvedValue(false),
-      findBeneficiaryById: jest.fn().mockResolvedValue(null),
-      saveTransfer: jest.fn(async (record) => {
-        transfers.set(record.id, { ...record });
-        return record;
-      }),
-      updateTransfer: jest.fn(async (record) => {
-        transfers.set(record.id, { ...record });
-        return record;
-      }),
-      findById: jest.fn(async (id) => transfers.get(id) ?? null),
-    };
-    const module = await Test.createTestingModule({
-      providers: [
-        TransferService,
-        { provide: TransferRepository, useValue: transferRepository },
-        TransferPolicy,
-        TransferValidator,
-        TransferMapper,
-        { provide: AccountService, useValue: accountService },
-        { provide: TransactionService, useValue: transactionService },
-        { provide: EventEmitter2, useValue: { emit: jest.fn() } },
-      ],
-    }).compile();
 
-    const service = module.get(TransferService);
-    const result = await service.createTransfer({ id: 'user-1' } as never, {
-      type: TransferType.INTERNAL,
-      sourceAccountId: '11111111-1111-1111-1111-111111111111',
-      destinationAccountId: '22222222-2222-2222-2222-222222222222',
-      amount: '10.00',
-      currency: 'USD',
-    } as never);
+    const result = await module
+      .get(TransferService)
+      .createTransfer({ id: 'user-1' } as never, INTERNAL_DTO as never);
 
     expect(result.status).toBe('COMPLETED');
     expect(transactionService.createTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks a transfer when the customer KYC is not approved', async () => {
+    const module = await buildModule({ kycStatus: 'PENDING' });
+    const transactionService = module.get(TransactionService) as unknown as {
+      createTransaction: jest.Mock;
+    };
+
+    await expect(
+      module.get(TransferService).createTransfer({ id: 'user-1' } as never, INTERNAL_DTO as never),
+    ).rejects.toBeInstanceOf(TransferPolicyViolationException);
+    // No money movement was attempted.
+    expect(transactionService.createTransaction).not.toHaveBeenCalled();
+  });
+
+  it('blocks a transfer from a restricted account with a support message', async () => {
+    const module = await buildModule({ kycStatus: 'APPROVED', account: { status: 'RESTRICTED' } });
+    const transactionService = module.get(TransactionService) as unknown as {
+      createTransaction: jest.Mock;
+    };
+
+    await expect(
+      module.get(TransferService).createTransfer({ id: 'user-1' } as never, INTERNAL_DTO as never),
+    ).rejects.toThrow(/restricted/i);
+    expect(transactionService.createTransaction).not.toHaveBeenCalled();
+  });
+
+  it('blocks a transfer from a frozen account', async () => {
+    const module = await buildModule({ kycStatus: 'APPROVED', account: { status: 'FROZEN' } });
+    await expect(
+      module.get(TransferService).createTransfer({ id: 'user-1' } as never, INTERNAL_DTO as never),
+    ).rejects.toBeInstanceOf(TransferPolicyViolationException);
+  });
+
+  it('rejects a transfer when the caller does not own the source account', async () => {
+    const module = await buildModule({ kycStatus: 'APPROVED', isHolder: false });
+    await expect(
+      module.get(TransferService).createTransfer({ id: 'user-1' } as never, INTERNAL_DTO as never),
+    ).rejects.toBeInstanceOf(TransferPolicyViolationException);
   });
 });

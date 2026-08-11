@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Table, Tbody, Td, Th, Thead, Tr } from '@/components/ui/table';
 import { loadDashboardData, type DashboardAccount, type DashboardTransfer } from '@/lib/api-data';
-import { createTransfer, type TransferType } from '@/lib/api';
+import { createTransfer, searchBanks, type BankDirectoryEntry, type TransferType } from '@/lib/api';
 
 const TRANSFER_TYPES: { value: TransferType; label: string; external: boolean }[] = [
   { value: 'INTERNAL', label: 'Between my accounts', external: false },
@@ -35,10 +35,33 @@ export default function TransfersPage() {
   const [accountNumber, setAccountNumber] = useState('');
   const [routingNumber, setRoutingNumber] = useState('');
   const [bankName, setBankName] = useState('');
+  const [accountType, setAccountType] = useState('CHECKING');
   const [amount, setAmount] = useState('');
   const [memo, setMemo] = useState('');
+  const [banks, setBanks] = useState<BankDirectoryEntry[]>([]);
+  const [banksSandbox, setBanksSandbox] = useState(false);
 
   const isExternal = TRANSFER_TYPES.find((entry) => entry.value === type)?.external ?? false;
+
+  // Load the configurable bank directory for the searchable selector. It is
+  // sandbox data until a real bank-directory provider is connected.
+  useEffect(() => {
+    void searchBanks()
+      .then((result) => {
+        setBanks(result.items ?? []);
+        setBanksSandbox(Boolean(result.sandbox));
+      })
+      .catch(() => setBanks([]));
+  }, []);
+
+  // Auto-fill the routing number when the typed bank matches a directory entry.
+  const onBankNameChange = (value: string) => {
+    setBankName(value);
+    const match = banks.find((bank) => bank.name.toLowerCase() === value.toLowerCase());
+    if (match) {
+      setRoutingNumber(match.routingNumber);
+    }
+  };
 
   const refresh = async () => {
     const data = await loadDashboardData();
@@ -168,8 +191,30 @@ export default function TransfersPage() {
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-sm font-medium text-slate-700">Bank name</label>
-                      <Input value={bankName} onChange={(event) => setBankName(event.target.value)} />
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Bank</label>
+                      <Input
+                        value={bankName}
+                        list="bank-directory"
+                        onChange={(event) => onBankNameChange(event.target.value)}
+                        placeholder="Search banks"
+                      />
+                      <datalist id="bank-directory">
+                        {banks.map((bank) => (
+                          <option key={bank.id} value={bank.name} />
+                        ))}
+                      </datalist>
+                      {banksSandbox ? (
+                        <p className="mt-1 text-xs text-amber-600">
+                          Sandbox bank directory — no live bank network is connected yet.
+                        </p>
+                      ) : null}
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Account type</label>
+                      <Select value={accountType} onChange={(event) => setAccountType(event.target.value)}>
+                        <option value="CHECKING">Checking</option>
+                        <option value="SAVINGS">Savings</option>
+                      </Select>
                     </div>
                   </>
                 ) : (
@@ -210,6 +255,13 @@ export default function TransfersPage() {
                 </div>
 
                 <div className="md:col-span-2 space-y-3">
+                  {isExternal ? (
+                    <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                      External transfers are submitted for processing and remain pending until they
+                      settle — no external settlement rail is connected yet. Verification (KYC) must be
+                      approved and the account must be unrestricted before a transfer can be initiated.
+                    </p>
+                  ) : null}
                   {error ? (
                     <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
                       {error}

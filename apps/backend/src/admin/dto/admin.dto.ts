@@ -266,3 +266,85 @@ export class AdminBulkIdsDto {
   @IsString({ each: true })
   ids!: string[];
 }
+
+class CustomerAddressDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() line1?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() line2?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() city?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() state?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() postalCode?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() country?: string;
+}
+
+class CustomerEmploymentDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() status?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() employer?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() jobTitle?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() annualIncome?: string;
+}
+
+export class UpdateCustomerDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() firstName?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() lastName?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() email?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() phoneNumber?: string;
+
+  @ApiPropertyOptional({ type: CustomerAddressDto })
+  @IsOptional()
+  @IsObject()
+  address?: CustomerAddressDto;
+
+  @ApiPropertyOptional({ type: CustomerEmploymentDto })
+  @IsOptional()
+  @IsObject()
+  employment?: CustomerEmploymentDto;
+}
+
+export class KycDecisionDto {
+  @ApiProperty({ enum: ['APPROVE', 'REJECT'] })
+  @IsString()
+  decision!: 'APPROVE' | 'REJECT';
+
+  @ApiPropertyOptional({ description: 'Required when rejecting' })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+export class AssignAccountDto {
+  @ApiProperty({ enum: ['CHECKING', 'SAVINGS', 'BUSINESS', 'INVESTMENT_CASH'] })
+  @IsString()
+  accountType!: 'CHECKING' | 'SAVINGS' | 'BUSINESS' | 'INVESTMENT_CASH';
+
+  @ApiPropertyOptional({ default: 'USD' })
+  @IsOptional()
+  @IsString()
+  currency?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  nickname?: string;
+}
+
+export class AccountRestrictionDto {
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  reason!: string;
+
+  @ApiPropertyOptional({ description: 'Restriction/lien category' })
+  @IsOptional()
+  @IsString()
+  restrictionType?: string;
+
+  @ApiPropertyOptional({ description: 'Amount for a partial lien, if applicable' })
+  @IsOptional()
+  @IsString()
+  amount?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  reference?: string;
+}

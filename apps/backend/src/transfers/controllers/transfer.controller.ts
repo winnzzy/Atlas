@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@ne
 import { type AuthenticatedUser } from '../../accounts/policies/account.policy';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { BankDirectoryService } from '../services/bank-directory.service';
 import { TransferService } from '../services/transfer.service';
 import { CreateBeneficiaryDto, CreateTransferDto } from '../dto/create-transfer.dto';
 import { SearchTransfersDto } from '../dto/search-transfers.dto';
@@ -13,7 +14,16 @@ import { BeneficiaryResponseDto, BeneficiarySearchResponseDto, TransferResponseD
 @UseGuards(JwtAuthGuard)
 @Controller('transfers')
 export class TransferController {
-  constructor(@Inject(TransferService) private readonly transferService: TransferService) {}
+  constructor(
+    @Inject(TransferService) private readonly transferService: TransferService,
+    @Inject(BankDirectoryService) private readonly bankDirectory: BankDirectoryService,
+  ) {}
+
+  @Get('banks')
+  @ApiOperation({ summary: 'Search the configurable bank directory (sandbox until a provider is connected)' })
+  searchBanks(@Query('q') q?: string, @Query('limit') limit?: string) {
+    return this.bankDirectory.search(q, limit ? Number(limit) : 25);
+  }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)

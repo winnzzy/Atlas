@@ -41,7 +41,7 @@ const adminItems = [
   { href: '/admin/settings', label: 'Settings', icon: Settings },
 ];
 
-export function Sidebar({ mobile }: { mobile?: boolean }) {
+export function Sidebar({ mobile, onNavigate }: { mobile?: boolean; onNavigate?: () => void }) {
   const { user, logout, isAdmin } = useAuth();
   const pathname = usePathname();
   const items = isAdmin ? adminItems : customerItems;
@@ -66,6 +66,7 @@ export function Sidebar({ mobile }: { mobile?: boolean }) {
             <Link
               key={href}
               href={href}
+              onClick={onNavigate}
               className={cn(
                 'flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium transition',
                 active
@@ -80,7 +81,10 @@ export function Sidebar({ mobile }: { mobile?: boolean }) {
         })}
       </nav>
       <button
-        onClick={logout}
+        onClick={() => {
+          onNavigate?.();
+          void logout();
+        }}
         className="mt-6 flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
       >
         <LogOut className="h-4 w-4" />

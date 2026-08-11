@@ -1,12 +1,13 @@
-import { Body, Controller, Get, Headers, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { NotificationChannel, NotificationType } from '@prisma/client';
 import { SearchTransactionsDto } from '../../transactions/dto/search-transactions.dto';
 import { SearchTransfersDto } from '../../transfers/dto/search-transfers.dto';
-import { AccountAdminActionDto, CardAdminActionDto, CustomerQueryDto, CustomerStatusActionDto, InvestmentAdminActionDto, NotificationQueueQueryDto } from '../dto';
+import { AccountAdminActionDto, AccountRestrictionDto, AssignAccountDto, CardAdminActionDto, CustomerQueryDto, CustomerStatusActionDto, InvestmentAdminActionDto, KycDecisionDto, NotificationQueueQueryDto, UpdateCustomerDto } from '../dto';
 import type { AdminRole } from '../dto';
 import { AdminAuthGuard } from '../guards/admin-auth.guard';
 import { AdminPolicy } from '../policies/admin.policy';
+import { AdminCustomerService } from '../services/admin-customer.service';
 import { AdminOrchestrationService } from '../services/admin-orchestration.service';
 
 @ApiTags('Admin Management')
@@ -16,6 +17,7 @@ import { AdminOrchestrationService } from '../services/admin-orchestration.servi
 export class AdminManagementController {
   constructor(
     private readonly orchestrationService: AdminOrchestrationService,
+    private readonly customerService: AdminCustomerService,
     private readonly policy: AdminPolicy,
   ) {}
 
@@ -89,6 +91,79 @@ export class AdminManagementController {
   resetPassword(@Headers('x-admin-role') role: AdminRole, @Param('userId') userId: string) {
     this.policy.assertAllowed(role, 'customer.manage');
     return this.orchestrationService.resetCustomerPassword(userId);
+  }
+
+  @Get('customers/:userId/detail')
+  @ApiOperation({ summary: 'Full customer record for the admin detail page' })
+  getCustomerDetail(@Headers('x-admin-role') role: AdminRole, @Param('userId') userId: string) {
+    this.policy.assertAllowed(role, 'customer.manage');
+    return this.customerService.getCustomerDetail(userId);
+  }
+
+  @Patch('customers/:userId')
+  @ApiOperation({ summary: 'Update customer profile fields' })
+  updateCustomer(
+    @Headers('x-admin-role') role: AdminRole,
+    @Headers('x-admin-id') adminId: string,
+    @Param('userId') userId: string,
+    @Body() body: UpdateCustomerDto,
+  ) {
+    this.policy.assertAllowed(role, 'customer.manage');
+    return this.customerService.updateCustomer(adminId, userId, body);
+  }
+
+  @Patch('customers/:userId/kyc')
+  @ApiOperation({ summary: 'Approve or reject KYC (audited)' })
+  decideKyc(
+    @Headers('x-admin-role') role: AdminRole,
+    @Headers('x-admin-id') adminId: string,
+    @Param('userId') userId: string,
+    @Body() body: KycDecisionDto,
+  ) {
+    this.policy.assertAllowed(role, 'customer.manage');
+    return this.customerService.decideKyc(adminId, userId, body);
+  }
+
+  @Post('customers/:userId/accounts')
+  @ApiOperation({ summary: 'Create/assign an account for a customer' })
+  assignAccount(
+    @Headers('x-admin-role') role: AdminRole,
+    @Headers('x-admin-id') adminId: string,
+    @Param('userId') userId: string,
+    @Body() body: AssignAccountDto,
+  ) {
+    this.policy.assertAllowed(role, 'account.manage');
+    return this.customerService.assignAccount(adminId, role, userId, body);
+  }
+
+  @Get('customers/:userId/audit')
+  @ApiOperation({ summary: 'Admin audit trail for a customer' })
+  getCustomerAudit(@Headers('x-admin-role') role: AdminRole, @Param('userId') userId: string) {
+    this.policy.assertAllowed(role, 'customer.manage');
+    return this.customerService.getCustomerAudit(userId);
+  }
+
+  @Patch('accounts/:accountId/restriction')
+  @ApiOperation({ summary: 'Apply an account restriction/hold (audited)' })
+  applyAccountRestriction(
+    @Headers('x-admin-role') role: AdminRole,
+    @Headers('x-admin-id') adminId: string,
+    @Param('accountId') accountId: string,
+    @Body() body: AccountRestrictionDto,
+  ) {
+    this.policy.assertAllowed(role, 'account.manage');
+    return this.customerService.applyRestriction(adminId, role, accountId, body);
+  }
+
+  @Delete('accounts/:accountId/restriction')
+  @ApiOperation({ summary: 'Release an account restriction (audited)' })
+  releaseAccountRestriction(
+    @Headers('x-admin-role') role: AdminRole,
+    @Headers('x-admin-id') adminId: string,
+    @Param('accountId') accountId: string,
+  ) {
+    this.policy.assertAllowed(role, 'account.manage');
+    return this.customerService.releaseRestriction(adminId, role, accountId);
   }
 
   @Patch('accounts/:accountId')

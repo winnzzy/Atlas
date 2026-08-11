@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -84,7 +85,14 @@ export default function AdminCustomersPage() {
               <Tbody>
                 {customers.map((customer) => (
                   <Tr key={customer.id}>
-                    <Td>{customer.name}</Td>
+                    <Td>
+                      <Link
+                        href={`/admin/customers/${customer.id}`}
+                        className="font-medium text-[#0b345a] underline-offset-2 hover:underline"
+                      >
+                        {customer.name}
+                      </Link>
+                    </Td>
                     <Td>{customer.email}</Td>
                     <Td>
                       <Badge variant={customer.status === 'ACTIVE' ? 'success' : 'warning'}>
@@ -93,17 +101,22 @@ export default function AdminCustomersPage() {
                     </Td>
                     <Td>{customer.kycStatus}</Td>
                     <Td>
-                      <Button
-                        variant="secondary"
-                        disabled={pending === customer.id}
-                        onClick={() => void applyAction(customer.id, customer.status)}
-                      >
-                        {pending === customer.id
-                          ? 'Working…'
-                          : customer.status === 'ACTIVE'
-                            ? 'Suspend'
-                            : 'Reactivate'}
-                      </Button>
+                      <div className="flex gap-2">
+                        <Link href={`/admin/customers/${customer.id}`}>
+                          <Button variant="secondary">Manage</Button>
+                        </Link>
+                        <Button
+                          variant="secondary"
+                          disabled={pending === customer.id}
+                          onClick={() => void applyAction(customer.id, customer.status)}
+                        >
+                          {pending === customer.id
+                            ? 'Working…'
+                            : customer.status === 'ACTIVE'
+                              ? 'Suspend'
+                              : 'Reactivate'}
+                        </Button>
+                      </div>
                     </Td>
                   </Tr>
                 ))}

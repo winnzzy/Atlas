@@ -141,9 +141,9 @@ export class AccountRepository {
   ): Promise<PrismaAccount> {
     const updateData: Record<string, unknown> = { status };
 
-    if (status === 'FROZEN') {
-      updateData.freezeReason = data?.freezeReason;
-      updateData.freezeNote = data?.freezeNote;
+    if (status === 'FROZEN' || status === 'RESTRICTED' || status === 'LOCKED') {
+      if (data?.freezeReason !== undefined) updateData.freezeReason = data.freezeReason;
+      if (data?.freezeNote !== undefined) updateData.freezeNote = data.freezeNote;
     }
     if (status === 'ACTIVE' && data?.freezeReason) {
       updateData.freezeReason = null;

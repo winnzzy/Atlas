@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { TransferController } from '../transfer.controller';
 import { TransferService } from '../../services/transfer.service';
+import { BankDirectoryService } from '../../services/bank-directory.service';
 import { TransferType } from '../../enums/transfer-type.enum';
 import { TransferStatus } from '../../enums/transfer-status.enum';
 
@@ -27,7 +28,10 @@ describe('TransferController', () => {
     serviceMock.createTransfer.mockResolvedValue({ id: 'trf-1', type: TransferType.INTERNAL, status: TransferStatus.COMPLETED } as never);
     const module = await Test.createTestingModule({
       controllers: [TransferController],
-      providers: [{ provide: TransferService, useValue: serviceMock }],
+      providers: [
+        { provide: TransferService, useValue: serviceMock },
+        { provide: BankDirectoryService, useValue: { search: jest.fn().mockReturnValue({ items: [], sandbox: true }) } },
+      ],
     }).compile();
     const controller = module.get(TransferController);
 

@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { randomUUID } from 'crypto';
+import { PrismaService } from '../../prisma/prisma.service';
 import { AccountService } from '../../accounts/services/account.service';
 import { TransactionService } from '../../transactions/services/transaction.service';
 import { TransactionType } from '../../transactions/enums/transaction-type.enum';
@@ -56,7 +57,53 @@ export class TransferService {
     @Inject(TransferValidator) private readonly validator: TransferValidator,
     @Inject(TransferMapper) private readonly mapper: TransferMapper,
     @Inject(EventEmitter2) private readonly eventEmitter: EventEmitter2,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
   ) {}
+
+  /**
+   * Enforce transfer eligibility on the BACKEND, in a predictable order, before
+   * any money moves. The frontend never decides this — hiding a button is not a
+   * control. Order (spec §14): authentication → account ownership → KYC →
+   * account status/restriction → (available balance is enforced by the policy).
+   *
+   * Admin-initiated flows (retry/cancel) run as an ADMIN actor and are exempt
+   * from the customer KYC gate; they still respect account status via the policy.
+   */
+  private async assertTransferEligibility(
+    user: AuthenticatedUser,
+    sourceAccount: { status: string },
+  ): Promise<void> {
+    const isAdminActor = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN';
+
+    // ── KYC gate ──────────────────────────────────────────────────────────
+    if (!isAdminActor) {
+      const owner = await this.prisma.user.findUnique({
+        where: { id: user.id },
+        select: { kycStatus: true },
+      });
+      if (!owner || owner.kycStatus !== 'APPROVED') {
+        throw new TransferPolicyViolationException(
+          'Identity verification (KYC) must be approved before you can initiate transfers. Please complete verification and try again.',
+        );
+      }
+    }
+
+    // ── Account status / restriction gate ────────────────────────────────
+    // A restricted, frozen, locked, closed or dormant account cannot originate
+    // transfers. We return a clear, non-sensitive business message and never
+    // leak internal administrative notes.
+    const status = sourceAccount.status;
+    if (status === 'RESTRICTED' || status === 'FROZEN' || status === 'LOCKED') {
+      throw new TransferPolicyViolationException(
+        'This account is currently restricted. Please contact customer support to complete this transaction.',
+      );
+    }
+    if (status !== 'ACTIVE' && status !== 'PENDING') {
+      throw new TransferPolicyViolationException(
+        `This account is not currently eligible for transfers (status: ${status}).`,
+      );
+    }
+  }
 
   async createTransfer(user: AuthenticatedUser, dto: CreateTransferDto): Promise<TransferResponseDto> {
     const isHolder = await this.accountService.isAccountHolder(dto.sourceAccountId, user.id);
@@ -79,6 +126,10 @@ export class TransferService {
     if (!sourceAccount) {
       throw new TransferValidationException(`Source account ${dto.sourceAccountId} not found`);
     }
+
+    // KYC + account-restriction gating happens here, server-side, before any
+    // money moves and before the balance/policy checks below.
+    await this.assertTransferEligibility(user, sourceAccount);
 
     const beneficiary = dto.beneficiaryId ? await this.repository.findBeneficiaryById(dto.beneficiaryId) : null;
     const destinationAccount = dto.destinationAccountId ? await this.accountService.findById(dto.destinationAccountId) : null;

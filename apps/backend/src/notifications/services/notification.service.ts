@@ -1,5 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { DeliveryStatus, NotificationChannel } from '@prisma/client';
+import { DeliveryStatus, NotificationChannel, NotificationPriority, NotificationType } from '@prisma/client';
 import type { NotificationContext } from '../events/notification.events';
 import { NotificationMapper } from '../mappers/notification.mapper'; // eslint-disable-line @typescript-eslint/consistent-type-imports
 import type { NotificationResponseDto, NotificationSearchResponseDto, SearchNotificationsDto } from '../dto';
@@ -72,6 +72,53 @@ export class NotificationService {
       this.logger.warn(
         `Notification handling skipped for ${context.sourceEventType}: ${this.errorMessage(error)}`,
       );
+      return null;
+    }
+  }
+
+  /**
+   * Create an in-app notification with an explicit title/body, bypassing
+   * template resolution. Used for admin-driven lifecycle events (KYC decisions,
+   * account assignment, restrictions) so a visible notification is guaranteed
+   * even when no channel template is seeded. Best-effort: failures are logged,
+   * never thrown, so they cannot break the originating admin action.
+   */
+  async notifyDirect(input: {
+    recipientId: string;
+    type: NotificationType;
+    title: string;
+    body: string;
+    priority?: NotificationPriority;
+    sourceEventType: string;
+    sourceAggregateId?: string;
+    variables?: Record<string, string | number | boolean | null>;
+  }): Promise<NotificationResponseDto | null> {
+    try {
+      const notification = await this.repository.createNotification({
+        userId: input.recipientId,
+        type: input.type,
+        priority: input.priority ?? NotificationPriority.NORMAL,
+        templateCode: 'DIRECT_ADMIN_EVENT',
+        templateVersion: 1,
+        title: input.title,
+        body: input.body,
+        variables: input.variables ?? {},
+        sourceEventType: input.sourceEventType,
+        sourceAggregateId: input.sourceAggregateId,
+      });
+
+      await this.deliveryService.queueAndDeliver({
+        notificationId: notification.id,
+        userId: input.recipientId,
+        title: input.title,
+        body: input.body,
+        channels: [NotificationChannel.IN_APP],
+      });
+
+      const refreshed = await this.repository.findNotificationById(notification.id);
+      return this.mapper.toNotificationDto(refreshed ?? notification);
+    } catch (error) {
+      this.logger.warn(`notifyDirect skipped for ${input.sourceEventType}: ${this.errorMessage(error)}`);
       return null;
     }
   }

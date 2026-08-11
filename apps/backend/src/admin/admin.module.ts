@@ -17,6 +17,7 @@ import { AdminPolicy } from './policies/admin.policy';
 import { AdminRepository } from './repositories/admin.repository';
 import { AdminAnalyticsService } from './services/admin-analytics.service';
 import { AdminAuditService } from './services/admin-audit.service';
+import { AdminCustomerService } from './services/admin-customer.service';
 import { AdminDashboardService } from './services/admin-dashboard.service';
 import { AdminOrchestrationService } from './services/admin-orchestration.service';
 import { AdminProvisioningService } from './services/admin-provisioning.service';
@@ -57,6 +58,7 @@ import { AdminValidator } from './validators/admin.validator';
     AdminSettingsService,
     AdminOrchestrationService,
     AdminProvisioningService,
+    AdminCustomerService,
   ],
   exports: [
     AdminAuthGuard,

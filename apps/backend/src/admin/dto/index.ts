@@ -1,5 +1,7 @@
 export {
   AccountAdminActionDto,
+  AccountRestrictionDto,
+  AssignAccountDto,
   AdminAnalyticsDto,
   AdminAuditLogDto,
   AdminAuditQueryDto,
@@ -16,9 +18,11 @@ export {
   CustomerQueryDto,
   CustomerStatusActionDto,
   InvestmentAdminActionDto,
+  KycDecisionDto,
   NotificationQueueQueryDto,
   PaginationDto,
   UpdateAdminSettingsDto,
+  UpdateCustomerDto,
 } from './admin.dto';
 
 export type { AdminRole } from './admin.dto';

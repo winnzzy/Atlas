@@ -39,6 +39,17 @@ import type { UpdateNicknameDto } from '../dto/update-nickname.dto';
 const DEFAULT_ROUTING_NUMBER = '021000021';
 const MAX_ACCOUNTS_PER_USER = 10;
 
+/**
+ * The routing number is a configured value, never a fabricated bank identity.
+ * Operators set ATLAS_ROUTING_NUMBER to the institution's real ABA (or an
+ * explicit sandbox value); the historical default is kept only as a fallback so
+ * existing environments do not regress.
+ */
+function resolveRoutingNumber(): string {
+  const configured = (process.env['ATLAS_ROUTING_NUMBER'] ?? '').trim();
+  return /^\d{9}$/.test(configured) ? configured : DEFAULT_ROUTING_NUMBER;
+}
+
 @Injectable()
 export class AccountService {
   private readonly logger = new Logger(AccountService.name);
@@ -79,13 +90,13 @@ export class AccountService {
       }
     }
 
-    const accountNumber = this.generateAccountNumber();
+    const accountNumber = await this.generateUniqueAccountNumber();
     const accountName = this.buildAccountName(dto.accountType, dto.name);
 
     const account = await this.accountRepository.create({
       userId: user.id,
       accountNumber,
-      routingNumber: DEFAULT_ROUTING_NUMBER,
+      routingNumber: resolveRoutingNumber(),
       type: dto.accountType as AccountTypeType,
       name: accountName,
       nickname: dto.nickname,
@@ -109,6 +120,55 @@ export class AccountService {
 
     this.logger.log(`Account created: ${account.id} for user ${user.id}`);
     return response;
+  }
+
+  /**
+   * Admin-driven account assignment for a specific customer.
+   *
+   * The account number is generated and validated for uniqueness SERVER-SIDE
+   * (never supplied by any client), the routing number comes from configuration,
+   * and the account opens with a zero balance. Funding must go through the
+   * existing admin credit / transaction engine — this method never fabricates
+   * money. Authorization is the caller's responsibility (the admin guard);
+   * `admin` is only used for audit context by the caller.
+   */
+  async adminAssignAccount(
+    admin: AuthenticatedUser,
+    targetUserId: string,
+    dto: { accountType: string; currency?: string; nickname?: string; name?: string },
+  ): Promise<AccountResponseDto> {
+    this.accountPolicy.requireAdmin(admin);
+
+    const { total } = await this.accountRepository.findByUserId(targetUserId, { status: 'ACTIVE' });
+    if (total >= MAX_ACCOUNTS_PER_USER) {
+      throw new ConflictException(`Customer already has the maximum of ${MAX_ACCOUNTS_PER_USER} active accounts`);
+    }
+
+    const accountNumber = await this.generateUniqueAccountNumber();
+    const account = await this.accountRepository.create({
+      userId: targetUserId,
+      accountNumber,
+      routingNumber: resolveRoutingNumber(),
+      type: dto.accountType as AccountTypeType,
+      name: this.buildAccountName(dto.accountType, dto.name),
+      nickname: dto.nickname,
+      currency: dto.currency ?? 'USD',
+      isDemo: false,
+    });
+
+    const activated = await this.accountRepository.updateStatus(account.id, 'ACTIVE');
+
+    this.eventBus.publish(
+      new AccountCreatedEvent(account.id, {
+        userId: targetUserId,
+        accountType: dto.accountType,
+        currency: account.currency,
+        name: account.name,
+      }),
+    );
+
+    this.logger.log(`Account ${account.id} assigned to user ${targetUserId} by admin ${admin.id}`);
+    return this.toResponseDto(activated);
   }
 
   async findById(accountId: string): Promise<{
@@ -280,6 +340,42 @@ export class AccountService {
     );
 
     this.logger.log(`Account ${accountId} unfrozen by admin ${user.id}`);
+    return this.toResponseDto(updated);
+  }
+
+  /**
+   * Apply an administrative restriction (lien/hold) to an account. The account
+   * remains visible to the customer, but the transfer-eligibility gate blocks
+   * originating transfers while it is RESTRICTED. Persisted on the account row.
+   */
+  async applyRestriction(
+    admin: AuthenticatedUser,
+    accountId: string,
+    reason: string,
+  ): Promise<AccountResponseDto> {
+    this.accountPolicy.requireAdmin(admin);
+    await this.findAccountOrThrow(accountId);
+    const updated = await this.accountRepository.updateStatus(accountId, 'RESTRICTED', {
+      freezeReason: 'REGULATORY',
+      freezeNote: reason,
+    });
+    this.logger.warn(`Account ${accountId} RESTRICTED by admin ${admin.id}: ${reason}`);
+    return this.toResponseDto(updated);
+  }
+
+  /**
+   * Release a previously applied restriction, returning the account to ACTIVE.
+   */
+  async releaseRestriction(admin: AuthenticatedUser, accountId: string): Promise<AccountResponseDto> {
+    this.accountPolicy.requireAdmin(admin);
+    const account = await this.findAccountOrThrow(accountId);
+    if (account.status !== 'RESTRICTED') {
+      throw new BadRequestException('Account is not restricted');
+    }
+    const updated = await this.accountRepository.updateStatus(accountId, 'ACTIVE', {
+      freezeReason: 'UNRESTRICT',
+    });
+    this.logger.log(`Account ${accountId} restriction released by admin ${admin.id}`);
     return this.toResponseDto(updated);
   }
 
@@ -627,6 +723,22 @@ export class AccountService {
     return num.toString().padStart(10, '0');
   }
 
+  /**
+   * Generate a server-side account number and confirm it is not already in use.
+   * Retries a bounded number of times to eliminate the (already tiny) collision
+   * risk before persisting. Numbers are never reused or client-supplied.
+   */
+  private async generateUniqueAccountNumber(): Promise<string> {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const candidate = this.generateAccountNumber();
+      const existing = await this.accountRepository.findByAccountNumber(candidate);
+      if (!existing) {
+        return candidate;
+      }
+    }
+    throw new ConflictException('Unable to allocate a unique account number, please retry');
+  }
+
   private buildAccountName(type: string, customName?: string): string {
     if (customName) return customName;
     const typeNames: Record<string, string> = {
@@ -658,7 +770,7 @@ export class AccountService {
     freezeReason: string | null;
     freezeNote: string | null;
     closedAt: Date | null;
-    closureReason: string | null;
+    closureReason: string | null;
     createdAt: Date;
     updatedAt: Date;
   }): AccountResponseDto {
@@ -682,7 +794,7 @@ export class AccountService {
       freezeReason: account.freezeReason as FreezeReasonType | null,
       freezeNote: account.freezeNote,
       closedAt: account.closedAt,
-      closureReason: account.closureReason as ClosureReasonType | null,
+      closureReason: account.closureReason as ClosureReasonType | null,
       createdAt: account.createdAt,
       updatedAt: account.updatedAt,
     });

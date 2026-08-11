@@ -512,3 +512,72 @@ export async function applyAdminCustomerAction(
 ) {
   return postJson<Record<string, unknown>>(`/api/v1/admin/customers/${userId}/status`, action, 'PATCH');
 }
+
+// ── Admin customer detail / KYC / accounts / restrictions ───────────────────
+
+export type AdminCustomerDetail = {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  phoneNumber?: string | null;
+  status: string;
+  kycStatus: string;
+  kycLevel?: string;
+  emailVerified?: boolean;
+  phoneVerified?: boolean;
+  address?: Record<string, string> | null;
+  employment?: Record<string, string> | null;
+  createdAt?: string;
+  updatedAt?: string;
+  audit?: Array<Record<string, unknown>>;
+};
+
+export async function getAdminCustomerDetail(userId: string) {
+  return requestJson<AdminCustomerDetail>(`/api/v1/admin/customers/${userId}/detail`);
+}
+
+export async function updateAdminCustomer(userId: string, input: Record<string, unknown>) {
+  return postJson<Record<string, unknown>>(`/api/v1/admin/customers/${userId}`, input, 'PATCH');
+}
+
+export async function decideAdminKyc(
+  userId: string,
+  input: { decision: 'APPROVE' | 'REJECT'; reason?: string },
+) {
+  return postJson<Record<string, unknown>>(`/api/v1/admin/customers/${userId}/kyc`, input, 'PATCH');
+}
+
+export async function assignAdminAccount(
+  userId: string,
+  input: { accountType: string; currency?: string; nickname?: string },
+) {
+  return postJson<Record<string, unknown>>(`/api/v1/admin/customers/${userId}/accounts`, input, 'POST');
+}
+
+export async function getAdminCustomerAudit(userId: string) {
+  return requestJson<Array<Record<string, unknown>>>(`/api/v1/admin/customers/${userId}/audit`);
+}
+
+export async function applyAdminAccountRestriction(
+  accountId: string,
+  input: { reason: string; restrictionType?: string; amount?: string; reference?: string },
+) {
+  return postJson<Record<string, unknown>>(`/api/v1/admin/accounts/${accountId}/restriction`, input, 'PATCH');
+}
+
+export async function releaseAdminAccountRestriction(accountId: string) {
+  return requestJson<Record<string, unknown>>(`/api/v1/admin/accounts/${accountId}/restriction`, {
+    method: 'DELETE',
+  });
+}
+
+// ── Bank directory (sandbox until a provider is connected) ──────────────────
+
+export type BankDirectoryEntry = { id: string; name: string; routingNumber: string; sandbox: boolean };
+
+export async function searchBanks(q?: string) {
+  return requestJson<{ items: BankDirectoryEntry[]; sandbox: boolean }>(
+    `/api/v1/transfers/banks${query({ q })}`,
+  );
+}
