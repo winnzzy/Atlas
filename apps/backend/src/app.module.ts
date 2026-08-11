@@ -5,6 +5,15 @@ import { HealthModule } from './health/health.module';
 import { ProfileModule } from './profile/profile.module';
 import { AuthModule } from './auth/auth.module';
 import { AccountsModule } from './accounts/accounts.module';
+import { CommonModule } from './common/common.module';
+import { LedgerModule } from './ledger/ledger.module';
+import { IntegrationModule } from './integration/integration.module';
+import { TransactionsModule } from './transactions/transactions.module';
+import { TransfersModule } from './transfers/transfers.module';
+import { CardsModule } from './cards/cards.module';
+import { InvestmentsModule } from './investments/investments.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -13,10 +22,19 @@ import { AccountsModule } from './accounts/accounts.module';
       envFilePath: '.env',
     }),
     PrismaModule,
+    CommonModule,
     HealthModule,
     ProfileModule,
     AuthModule,
     AccountsModule,
+    LedgerModule,
+    IntegrationModule,
+    TransactionsModule,
+    TransfersModule,
+    CardsModule,
+    InvestmentsModule,
+    NotificationsModule,
+    AdminModule,
   ],
 })
 export class AppModule {}

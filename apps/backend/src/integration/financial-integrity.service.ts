@@ -1,16 +1,16 @@
-import { ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
-import type { EventEmitter2 } from '@nestjs/event-emitter';
+import { ConflictException, ForbiddenException, Inject, Injectable } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Decimal } from '@prisma/client/runtime/library';
 import type { Request } from 'express';
-import type { AccountService } from '../accounts/services/account.service';
-import type { AccountRepository } from '../accounts/repositories/account.repository';
+import { AccountService } from '../accounts/services/account.service';
+import { AccountRepository } from '../accounts/repositories/account.repository';
 import type { AuthenticatedUser } from '../accounts/policies/account.policy';
-import type { LedgerService } from '../ledger/services/ledger.service';
+import { LedgerService } from '../ledger/services/ledger.service';
 import type { Journal, Posting, Hold, Reversal} from '@atlas/domain';
-import type { IdempotencyService } from './idempotency.service';
-import type { FinancialAuditService } from './financial-audit.service';
-import type { RequestContextService } from '../common/request-context.service';
-import type { PrismaService } from '../prisma/prisma.service';
+import { IdempotencyService } from './idempotency.service';
+import { FinancialAuditService } from './financial-audit.service';
+import { RequestContextService } from '../common/request-context.service';
+import { PrismaService } from '../prisma/prisma.service';
 import type { PostJournalDto } from '../ledger/dto/post-journal.dto';
 import type { CreateHoldDto, ReleaseHoldDto } from '../ledger/dto/hold.dto';
 import type { ReverseJournalDto } from '../ledger/dto/reverse-journal.dto';
@@ -29,7 +29,7 @@ export class FinancialIntegrityService {
     private readonly financialAuditService: FinancialAuditService,
     private readonly requestContext: RequestContextService,
     private readonly prisma: PrismaService,
-    private readonly eventEmitter: EventEmitter2,
+    @Inject(EventEmitter2) private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async createAccount(user: AuthenticatedUser, dto: { accountType: string; name: string; nickname?: string; currency?: string; }, request?: Request): Promise<FinancialResponse<unknown>> {

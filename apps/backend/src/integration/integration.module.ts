@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AuthModule } from '../auth/auth.module';
 import { AccountsModule } from '../accounts/accounts.module';
@@ -9,7 +10,7 @@ import { FinancialAuditService } from './financial-audit.service';
 import { FinancialIntegrityService } from './financial-integrity.service';
 
 @Module({
-  imports: [PrismaModule, AuthModule, AccountsModule, LedgerModule, CommonModule],
+  imports: [EventEmitterModule.forRoot(), PrismaModule, AuthModule, AccountsModule, LedgerModule, CommonModule],
   providers: [IdempotencyService, FinancialAuditService, FinancialIntegrityService],
   exports: [IdempotencyService, FinancialAuditService, FinancialIntegrityService],
 })

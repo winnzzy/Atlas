@@ -16,7 +16,7 @@ import {
   ApiBearerAuth,
   ApiParam,
 } from '@nestjs/swagger';
-import type { LedgerService } from '../services/ledger.service';
+import { LedgerService } from '../services/ledger.service';
 import type { PostJournalDto } from '../dto/post-journal.dto';
 import type { CreateHoldDto, ReleaseHoldDto } from '../dto/hold.dto';
 import type { ReverseJournalDto } from '../dto/reverse-journal.dto';

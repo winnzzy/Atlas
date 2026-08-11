@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { JwtModule } from '@nestjs/jwt';
 import { AccountsModule } from '../accounts/accounts.module';
 import { CardsModule } from '../cards/cards.module';
 import { InvestmentsModule } from '../investments/investments.module';
@@ -9,6 +11,7 @@ import { TransfersModule } from '../transfers/transfers.module';
 import { AdminDashboardController } from './controllers/admin-dashboard.controller';
 import { AdminManagementController } from './controllers/admin-management.controller';
 import { AdminSystemController } from './controllers/admin-system.controller';
+import { AdminAuthGuard } from './guards/admin-auth.guard';
 import { AdminMapper } from './mappers/admin.mapper';
 import { AdminPolicy } from './policies/admin.policy';
 import { AdminRepository } from './repositories/admin.repository';
@@ -24,6 +27,13 @@ import { AdminValidator } from './validators/admin.validator';
 @Module({
   imports: [
     PrismaModule,
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        secret: configService.get<string>('JWT_SECRET', 'local-dev-secret'),
+      }),
+    }),
     AccountsModule,
     CardsModule,
     TransactionsModule,
@@ -33,6 +43,7 @@ import { AdminValidator } from './validators/admin.validator';
   ],
   controllers: [AdminDashboardController, AdminManagementController, AdminSystemController],
   providers: [
+    AdminAuthGuard,
     AdminPolicy,
     AdminValidator,
     AdminMapper,
@@ -46,6 +57,7 @@ import { AdminValidator } from './validators/admin.validator';
     AdminOrchestrationService,
   ],
   exports: [
+    AdminAuthGuard,
     AdminPolicy,
     AdminRepository,
     AdminDashboardService,

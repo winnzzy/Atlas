@@ -1,4 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import type {
   JournalStatus} from '@atlas/domain';
 import {
@@ -64,7 +65,6 @@ import {
   HoldNotFoundException,
   ReversalNotAllowedException,
 } from '../exceptions/ledger-domain.exception';
-import type { EventEmitter2 } from '@nestjs/event-emitter';
 import type { HoldStatus, SettlementStatus } from '@atlas/domain';
 
 interface SerializedMoney {
@@ -115,7 +115,7 @@ export class LedgerService implements LedgerRepository, EventBus {
   private readonly journalValidator: JournalValidator;
   private readonly ledgerValidator: LedgerValidator;
 
-  constructor(private readonly eventEmitter: EventEmitter2) {
+  constructor(@Inject(EventEmitter2) private readonly eventEmitter: EventEmitter2) {
     this.journalValidator = new JournalValidator(this);
     this.ledgerValidator = new LedgerValidator(this);
     this.balanceCalculator = new BalanceCalculator();

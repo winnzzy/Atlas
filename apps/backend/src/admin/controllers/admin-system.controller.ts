@@ -1,14 +1,16 @@
-import { Body, Controller, Get, Headers, Patch, Query } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Patch, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { AdminRole, AdminAuditQueryDto, AdminReportQueryDto, AdminSearchQueryDto, PaginationDto, UpdateAdminSettingsDto } from '../dto';
-import type { AdminAuditService } from '../services/admin-audit.service';
-import type { AdminReportingService } from '../services/admin-reporting.service';
-import type { AdminSearchService } from '../services/admin-search.service';
-import type { AdminSettingsService } from '../services/admin-settings.service';
-import type { AdminPolicy } from '../policies/admin.policy';
+import { AdminAuthGuard } from '../guards/admin-auth.guard';
+import { AdminPolicy } from '../policies/admin.policy';
+import { AdminAuditService } from '../services/admin-audit.service';
+import { AdminReportingService } from '../services/admin-reporting.service';
+import { AdminSearchService } from '../services/admin-search.service';
+import { AdminSettingsService } from '../services/admin-settings.service';
 
 @ApiTags('Admin System')
 @ApiBearerAuth()
+@UseGuards(AdminAuthGuard)
 @Controller('admin')
 export class AdminSystemController {
   constructor(

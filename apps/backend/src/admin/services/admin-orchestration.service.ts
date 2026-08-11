@@ -2,20 +2,20 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import type { NotificationChannel, NotificationType} from '@prisma/client';
 import { UserStatus } from '@prisma/client';
 import type { AuthenticatedUser } from '../../accounts/policies/account.policy';
-import type { AccountService } from '../../accounts/services/account.service';
-import type { CardService } from '../../cards/services/card.service';
+import { AccountService } from '../../accounts/services/account.service';
+import { CardService } from '../../cards/services/card.service';
 import type { CreateCardDto } from '../../cards/dto/cards.dto';
-import type { ApprovalService } from '../../investments/services/approval.service';
-import type { AssetService } from '../../investments/services/asset.service';
-import type { PortfolioService } from '../../investments/services/portfolio.service';
-import type { PricingService } from '../../investments/services/pricing.service';
-import type { WalletService } from '../../investments/services/wallet.service';
+import { ApprovalService } from '../../investments/services/approval.service';
+import { AssetService } from '../../investments/services/asset.service';
+import { PortfolioService } from '../../investments/services/portfolio.service';
+import { PricingService } from '../../investments/services/pricing.service';
+import { WalletService } from '../../investments/services/wallet.service';
 import type { CreateWalletDto } from '../../investments/dto/wallet.dto';
-import type { NotificationService } from '../../notifications/services/notification.service';
-import type { NotificationTemplateService } from '../../notifications/services/notification-template.service';
-import type { TransactionService } from '../../transactions/services/transaction.service';
+import { NotificationService } from '../../notifications/services/notification.service';
+import { NotificationTemplateService } from '../../notifications/services/notification-template.service';
+import { TransactionService } from '../../transactions/services/transaction.service';
 import type { SearchTransactionsDto } from '../../transactions/dto/search-transactions.dto';
-import type { TransferService } from '../../transfers/services/transfer.service';
+import { TransferService } from '../../transfers/services/transfer.service';
 import type { SearchTransfersDto } from '../../transfers/dto/search-transfers.dto';
 import type {
   AccountAdminActionDto,
@@ -25,7 +25,7 @@ import type {
   InvestmentAdminActionDto,
   NotificationQueueQueryDto,
 } from '../dto';
-import type { AdminRepository } from '../repositories/admin.repository';
+import { AdminRepository } from '../repositories/admin.repository';
 
 const ADMIN_ACTOR: AuthenticatedUser = {
   id: 'admin-system',

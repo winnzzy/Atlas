@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { AdminReportDto, AdminReportQueryDto } from '../dto';
-import type { AdminMapper } from '../mappers/admin.mapper';
-import type { AdminRepository } from '../repositories/admin.repository';
+import { AdminMapper } from '../mappers/admin.mapper';
+import { AdminRepository } from '../repositories/admin.repository';
 
 @Injectable()
 export class AdminReportingService {

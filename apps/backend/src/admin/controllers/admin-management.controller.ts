@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { NotificationChannel, NotificationType } from '@prisma/client';
 import type { SearchTransactionsDto } from '../../transactions/dto/search-transactions.dto';
@@ -12,11 +12,13 @@ import type {
   InvestmentAdminActionDto,
   NotificationQueueQueryDto,
 } from '../dto';
-import type { AdminPolicy } from '../policies/admin.policy';
-import type { AdminOrchestrationService } from '../services/admin-orchestration.service';
+import { AdminAuthGuard } from '../guards/admin-auth.guard';
+import { AdminPolicy } from '../policies/admin.policy';
+import { AdminOrchestrationService } from '../services/admin-orchestration.service';
 
 @ApiTags('Admin Management')
 @ApiBearerAuth()
+@UseGuards(AdminAuthGuard)
 @Controller('admin')
 export class AdminManagementController {
   constructor(

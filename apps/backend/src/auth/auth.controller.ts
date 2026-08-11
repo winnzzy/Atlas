@@ -45,9 +45,7 @@ import { AuthService } from './auth.service';
 @ApiTags('Authentication')
 @Controller('auth')
 export class AuthController {
-  constructor(@Inject(AuthService) readonly authService: AuthService) {
-    console.log('AuthController constructor authService:', authService);
-  }
+  constructor(@Inject(AuthService) readonly authService: AuthService) {}
 
   @Public()
   @Post('register')
@@ -58,7 +56,6 @@ export class AuthController {
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ) {
-    console.log('Register handler this.authService:', this?.authService);
     const result = await this.authService.register(body, request);
     this.setAuthCookies(response, result.data.refreshToken, result.data.sessionId);
     return result;

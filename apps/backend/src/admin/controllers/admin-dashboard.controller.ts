@@ -1,13 +1,15 @@
-import { Controller, Get, Headers } from '@nestjs/common';
+import { Controller, Get, Headers, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { AdminRole } from '../dto';
 import { AdminDashboardOverviewDto } from '../dto';
-import type { AdminPolicy } from '../policies/admin.policy';
-import type { AdminAnalyticsService } from '../services/admin-analytics.service';
-import type { AdminDashboardService } from '../services/admin-dashboard.service';
+import { AdminAuthGuard } from '../guards/admin-auth.guard';
+import { AdminPolicy } from '../policies/admin.policy';
+import { AdminAnalyticsService } from '../services/admin-analytics.service';
+import { AdminDashboardService } from '../services/admin-dashboard.service';
 
 @ApiTags('Admin Dashboard')
 @ApiBearerAuth()
+@UseGuards(AdminAuthGuard)
 @Controller('admin/dashboard')
 export class AdminDashboardController {
   constructor(

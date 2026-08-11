@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { AdminAnalyticsDto } from '../dto';
-import type { AdminRepository } from '../repositories/admin.repository';
+import { AdminRepository } from '../repositories/admin.repository';
 
 @Injectable()
 export class AdminAnalyticsService {

@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import type { AdminAuditLogDto, AdminAuditQueryDto, PaginationDto } from '../dto';
-import type { AdminMapper } from '../mappers/admin.mapper';
-import type { AdminRepository } from '../repositories/admin.repository';
-import type { AdminValidator } from '../validators/admin.validator';
+import { AdminMapper } from '../mappers/admin.mapper';
+import { AdminRepository } from '../repositories/admin.repository';
+import { AdminValidator } from '../validators/admin.validator';
 
 @Injectable()
 export class AdminAuditService {
