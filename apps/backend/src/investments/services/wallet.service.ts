@@ -118,8 +118,11 @@ export class WalletService {
 
   async getActiveWalletForProduct(productId: string, network?: string): Promise<WalletResponseDto> {
     const wallets = await this.repository.findWalletsByProduct(productId);
+    // Prisma's generated enum is nominally distinct from the domain enum even
+    // though the values match, so compare as strings.
     const active = wallets.find(
-      (w: { status: WalletStatus; network: string }) => w.status === WalletStatus.ACTIVE && (!network || w.network === network),
+      (w: { status: string; network: string }) =>
+        String(w.status) === String(WalletStatus.ACTIVE) && (!network || w.network === network),
     );
     if (!active) {
       throw InvestmentDomainException.walletNotFound(productId);

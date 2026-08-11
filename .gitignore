@@ -46,3 +46,6 @@ prisma/migrations/
 
 # Docker
 docker/data/
+
+# Local API smoke-test scratch file
+.e2e-body.json

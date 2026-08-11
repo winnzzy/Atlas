@@ -69,10 +69,12 @@ export class WithdrawalService {
     }
 
     const userWithdrawals = await this.repository.findWithdrawalsByUser(userId);
+    // Prisma's generated enum is nominally distinct from the domain enum even
+    // though the values match, so compare as strings.
     const pendingForProduct = userWithdrawals.find(
-      (withdrawal: { productId: string; status: WithdrawalStatus }) =>
+      (withdrawal: { productId: string; status: string }) =>
         withdrawal.productId === product.id &&
-        withdrawal.status === WithdrawalStatus.PENDING,
+        String(withdrawal.status) === String(WithdrawalStatus.PENDING),
     );
 
     this.policy.assertCanWithdraw(

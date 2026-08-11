@@ -242,7 +242,7 @@ export class AdminRepository {
         id: u.id,
         primary: `${u.firstName} ${u.lastName}`,
         secondary: u.email,
-        metadata: { phone: u.phoneNumber ?? null, status: u.status },
+        metadata: { phone: u.phoneNumber ?? null, status: String(u.status) },
       })),
       ...accounts.map((a: { id: string; accountNumber: string; type: string; status: string; currency: string }) => ({
         kind: 'account',

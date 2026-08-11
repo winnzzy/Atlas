@@ -1697,3 +1697,255 @@ model UserSetting {
 
   @@map("user_settings")
 }
+
+// ============================================================
+// MODELS - Investment Custody Domain
+// ============================================================
+// These back InvestmentRepository. The repository was written against them but
+// they were never declared, so prisma.investmentProduct and its siblings were
+// undefined at runtime and every investments request failed with a 500. Adding
+// them is purely additive: no existing model or column is changed.
+
+enum InvestmentAssetClass {
+  CRYPTO
+  STOCK
+  ETF
+  BOND
+  MONEY_MARKET
+  GOLD
+}
+
+enum InvestmentProductStatus {
+  ACTIVE
+  SUSPENDED
+  DISABLED
+  DELISTED
+}
+
+enum InvestmentWalletStatus {
+  ACTIVE
+  INACTIVE
+  FROZEN
+}
+
+enum InvestmentDepositStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  COMPLETED
+}
+
+enum InvestmentWithdrawalStatus {
+  PENDING
+  AWAITING_APPROVAL
+  APPROVED
+  PROCESSING
+  COMPLETED
+  REJECTED
+  CANCELLED
+  FAILED
+}
+
+enum InvestmentEntryType {
+  DEPOSIT
+  WITHDRAWAL
+  BUY
+  SELL
+  FEE
+  ADJUSTMENT
+}
+
+enum InvestmentEntryStatus {
+  PENDING
+  AWAITING_APPROVAL
+  APPROVED
+  PROCESSING
+  COMPLETED
+  REJECTED
+  CANCELLED
+  FAILED
+}
+
+model InvestmentProduct {
+  id            String                  @id @default(uuid()) @db.Uuid
+  symbol        String                  @unique @db.VarChar(20)
+  name          String                  @db.VarChar(120)
+  assetClass    InvestmentAssetClass    @map("asset_class")
+  status        InvestmentProductStatus @default(ACTIVE)
+  description   String?                 @db.VarChar(500)
+  iconUrl       String?                 @map("icon_url") @db.VarChar(500)
+  decimals      Int                     @default(8)
+  minDeposit    Decimal?                @map("min_deposit") @db.Decimal(24, 8)
+  minWithdrawal Decimal?                @map("min_withdrawal") @db.Decimal(24, 8)
+  withdrawalFee Decimal?                @map("withdrawal_fee") @db.Decimal(24, 8)
+  createdAt     DateTime                @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime                @updatedAt @map("updated_at") @db.Timestamptz()
+
+  priceHistory InvestmentPrice[]
+  wallets      InvestmentCustodyWallet[]
+  deposits     InvestmentCustodyDeposit[]
+  withdrawals  InvestmentCustodyWithdrawal[]
+  positions    InvestmentPosition[]
+  entries      InvestmentEntry[]
+
+  @@index([assetClass])
+  @@index([status])
+  @@map("investment_products")
+}
+
+model InvestmentPrice {
+  id           String   @id @default(uuid()) @db.Uuid
+  productId    String   @map("product_id") @db.Uuid
+  price        Decimal  @db.Decimal(24, 8)
+  currency     String   @default("USD") @db.VarChar(3)
+  change24h    Decimal? @map("change_24h") @db.Decimal(24, 8)
+  change24hPct Decimal? @map("change_24h_pct") @db.Decimal(12, 4)
+  marketCap    Decimal? @map("market_cap") @db.Decimal(24, 2)
+  volume24h    Decimal? @map("volume_24h") @db.Decimal(24, 2)
+  updatedBy    String?  @map("updated_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  product InvestmentProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, createdAt])
+  @@map("investment_prices")
+}
+
+model InvestmentCustodyWallet {
+  id        String                 @id @default(uuid()) @db.Uuid
+  productId String                 @map("product_id") @db.Uuid
+  network   String                 @db.VarChar(60)
+  address   String                 @db.VarChar(200)
+  memo      String?                @db.VarChar(200)
+  label     String?                @db.VarChar(120)
+  status    InvestmentWalletStatus @default(ACTIVE)
+  createdAt DateTime               @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime               @updatedAt @map("updated_at") @db.Timestamptz()
+
+  product  InvestmentProduct          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  deposits InvestmentCustodyDeposit[]
+
+  @@index([productId])
+  @@index([address])
+  @@map("investment_custody_wallets")
+}
+
+model InvestmentCustodyDeposit {
+  id              String                  @id @default(uuid()) @db.Uuid
+  userId          String                  @map("user_id") @db.Uuid
+  productId       String                  @map("product_id") @db.Uuid
+  walletId        String                  @map("wallet_id") @db.Uuid
+  amount          Decimal                 @db.Decimal(24, 8)
+  network         String                  @db.VarChar(60)
+  reference       String                  @unique @db.VarChar(80)
+  txHash          String?                 @map("tx_hash") @db.VarChar(200)
+  status          InvestmentDepositStatus @default(PENDING)
+  approvedBy      String?                 @map("approved_by") @db.Uuid
+  approvedAt      DateTime?               @map("approved_at") @db.Timestamptz()
+  rejectedBy      String?                 @map("rejected_by") @db.Uuid
+  rejectedAt      DateTime?               @map("rejected_at") @db.Timestamptz()
+  rejectionReason String?                 @map("rejection_reason") @db.VarChar(500)
+  createdAt       DateTime                @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime                @updatedAt @map("updated_at") @db.Timestamptz()
+
+  product InvestmentProduct       @relation(fields: [productId], references: [id])
+  wallet  InvestmentCustodyWallet @relation(fields: [walletId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@map("investment_custody_deposits")
+}
+
+model InvestmentCustodyWithdrawal {
+  id              String                     @id @default(uuid()) @db.Uuid
+  userId          String                     @map("user_id") @db.Uuid
+  productId       String                     @map("product_id") @db.Uuid
+  amount          Decimal                    @db.Decimal(24, 8)
+  network         String                     @db.VarChar(60)
+  toAddress       String                     @map("to_address") @db.VarChar(200)
+  toMemo          String?                    @map("to_memo") @db.VarChar(200)
+  fee             Decimal                    @db.Decimal(24, 8)
+  netAmount       Decimal                    @map("net_amount") @db.Decimal(24, 8)
+  reference       String                     @unique @db.VarChar(80)
+  txHash          String?                    @map("tx_hash") @db.VarChar(200)
+  status          InvestmentWithdrawalStatus @default(PENDING)
+  approvedBy      String?                    @map("approved_by") @db.Uuid
+  approvedAt      DateTime?                  @map("approved_at") @db.Timestamptz()
+  rejectedBy      String?                    @map("rejected_by") @db.Uuid
+  rejectedAt      DateTime?                  @map("rejected_at") @db.Timestamptz()
+  rejectionReason String?                    @map("rejection_reason") @db.VarChar(500)
+  createdAt       DateTime                   @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime                   @updatedAt @map("updated_at") @db.Timestamptz()
+
+  product InvestmentProduct @relation(fields: [productId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+  @@map("investment_custody_withdrawals")
+}
+
+model InvestmentPortfolio {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @unique @map("user_id") @db.Uuid
+  totalValue Decimal  @default(0) @map("total_value") @db.Decimal(24, 8)
+  currency   String   @default("USD") @db.VarChar(3)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  positions InvestmentPosition[]
+  entries   InvestmentEntry[]
+
+  @@map("investment_portfolios")
+}
+
+model InvestmentPosition {
+  id            String   @id @default(uuid()) @db.Uuid
+  portfolioId   String   @map("portfolio_id") @db.Uuid
+  productId     String   @map("product_id") @db.Uuid
+  quantity      Decimal  @default(0) @db.Decimal(24, 8)
+  averageCost   Decimal  @default(0) @map("average_cost") @db.Decimal(24, 8)
+  totalCost     Decimal  @default(0) @map("total_cost") @db.Decimal(24, 8)
+  currentValue  Decimal  @default(0) @map("current_value") @db.Decimal(24, 8)
+  profitLoss    Decimal  @default(0) @map("profit_loss") @db.Decimal(24, 8)
+  profitLossPct Decimal  @default(0) @map("profit_loss_pct") @db.Decimal(12, 4)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  portfolio InvestmentPortfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  product   InvestmentProduct   @relation(fields: [productId], references: [id])
+
+  @@unique([portfolioId, productId])
+  @@index([productId])
+  @@map("investment_positions")
+}
+
+model InvestmentEntry {
+  id            String                @id @default(uuid()) @db.Uuid
+  portfolioId   String                @map("portfolio_id") @db.Uuid
+  productId     String                @map("product_id") @db.Uuid
+  type          InvestmentEntryType
+  status        InvestmentEntryStatus @default(PENDING)
+  quantity      Decimal               @db.Decimal(24, 8)
+  pricePerUnit  Decimal               @map("price_per_unit") @db.Decimal(24, 8)
+  totalAmount   Decimal               @map("total_amount") @db.Decimal(24, 8)
+  fee           Decimal               @default(0) @db.Decimal(24, 8)
+  currency      String                @default("USD") @db.VarChar(3)
+  reference     String                @unique @db.VarChar(80)
+  description   String?               @db.VarChar(500)
+  createdBy     String?               @map("created_by") @db.Uuid
+  approvedBy    String?               @map("approved_by") @db.Uuid
+  approvedAt    DateTime?             @map("approved_at") @db.Timestamptz()
+  completedAt   DateTime?             @map("completed_at") @db.Timestamptz()
+  failedAt      DateTime?             @map("failed_at") @db.Timestamptz()
+  failureReason String?               @map("failure_reason") @db.VarChar(500)
+  transactionId String?               @map("transaction_id") @db.Uuid
+  createdAt     DateTime              @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime              @updatedAt @map("updated_at") @db.Timestamptz()
+
+  portfolio InvestmentPortfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  product   InvestmentProduct   @relation(fields: [productId], references: [id])
+
+  @@index([portfolioId, createdAt])
+  @@map("investment_entries")
+}
