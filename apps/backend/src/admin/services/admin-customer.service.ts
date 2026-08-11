@@ -8,6 +8,11 @@ import { NotificationService } from '../../notifications/services/notification.s
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AdminRole } from '../dto';
 import type { AssignAccountDto, KycDecisionDto, UpdateCustomerDto } from '../dto';
+import {
+  AdminPresentationService,
+  type GeneratePresentationDto,
+  type PresentationStatus,
+} from './admin-presentation.service';
 
 /**
  * All customer/KYC/account admin mutations funnel through here so that every
@@ -25,6 +30,7 @@ export class AdminCustomerService {
     private readonly prisma: PrismaService,
     private readonly accountService: AccountService,
     private readonly notificationService: NotificationService,
+    private readonly presentationService: AdminPresentationService,
   ) {}
 
   private adminActor(adminId: string, role: AdminRole): AuthenticatedUser {
@@ -333,5 +339,47 @@ export class AdminCustomerService {
       performedBy: action.adminUserId,
       createdAt: action.createdAt.toISOString(),
     }));
+  }
+
+  /** Presentation-activity status for the admin view (§18) + idempotency (§7). */
+  async getPresentationStatus(userId: string, accountId: string): Promise<PresentationStatus> {
+    return this.presentationService.getStatus(userId, accountId);
+  }
+
+  /**
+   * Generate (or replace) presentation activity for a customer account. The
+   * generation itself is atomic and self-reconciling; here we add the mandatory
+   * audit record (§8) and notify the customer that new activity is available.
+   */
+  async generatePresentation(
+    adminId: string,
+    userId: string,
+    dto: GeneratePresentationDto,
+  ): Promise<Record<string, unknown>> {
+    await this.requireUser(userId);
+    const result = await this.presentationService.generate(userId, dto);
+
+    await this.recordAction(
+      adminId,
+      result.replaced ? 'PRESENTATION_REPLACE' : 'PRESENTATION_GENERATE',
+      'ACCOUNT',
+      result.accountId,
+      {
+        userId,
+        accountId: result.accountId,
+        operation: result.replaced ? 'REPLACE' : 'GENERATE',
+        batchId: result.batchId,
+        targetBalance: result.finalBalance,
+        openingBalance: result.openingBalance,
+        totalCredits: result.totalCredits,
+        totalDebits: result.totalDebits,
+        transactionCount: result.transactionCount,
+        periodStart: result.periodStart,
+        periodEnd: result.periodEnd,
+        generatedAt: new Date().toISOString(),
+      },
+    );
+
+    return { ...result };
   }
 }

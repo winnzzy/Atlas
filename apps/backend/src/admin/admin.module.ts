@@ -20,6 +20,7 @@ import { AdminAuditService } from './services/admin-audit.service';
 import { AdminCustomerService } from './services/admin-customer.service';
 import { AdminDashboardService } from './services/admin-dashboard.service';
 import { AdminOrchestrationService } from './services/admin-orchestration.service';
+import { AdminPresentationService } from './services/admin-presentation.service';
 import { AdminProvisioningService } from './services/admin-provisioning.service';
 import { AdminReportingService } from './services/admin-reporting.service';
 import { AdminSearchService } from './services/admin-search.service';
@@ -59,6 +60,7 @@ import { AdminValidator } from './validators/admin.validator';
     AdminOrchestrationService,
     AdminProvisioningService,
     AdminCustomerService,
+    AdminPresentationService,
   ],
   exports: [
     AdminAuthGuard,

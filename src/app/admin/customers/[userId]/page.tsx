@@ -14,12 +14,23 @@ import {
   applyAdminAccountRestriction,
   assignAdminAccount,
   decideAdminKyc,
+  generateAdminPresentation,
   getAdminCustomerAccounts,
   getAdminCustomerDetail,
+  getAdminPresentationStatus,
   releaseAdminAccountRestriction,
   updateAdminCustomer,
   type AdminCustomerDetail,
+  type AdminPresentationStatus,
 } from '@/lib/api';
+
+const DEFAULT_PRESENTATION_TARGET = '4700000.00';
+
+function formatCurrency(value: string | number | undefined): string {
+  const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value ?? '0'));
+  if (!Number.isFinite(parsed)) return String(value ?? '—');
+  return parsed.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+}
 
 type AccountRow = Record<string, unknown>;
 
@@ -50,6 +61,12 @@ export default function AdminCustomerDetailPage() {
   const [assignType, setAssignType] = useState('CHECKING');
   const [restrictFor, setRestrictFor] = useState<string | null>(null);
   const [restrictReason, setRestrictReason] = useState('');
+
+  // Presentation activity generator
+  const [presAccountId, setPresAccountId] = useState('');
+  const [presTarget, setPresTarget] = useState(DEFAULT_PRESENTATION_TARGET);
+  const [presStatus, setPresStatus] = useState<AdminPresentationStatus | null>(null);
+  const [presConfirmOpen, setPresConfirmOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -84,6 +101,47 @@ export default function AdminCustomerDetailPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Default the presentation account to the customer's first account.
+  useEffect(() => {
+    if (!presAccountId && accounts.length > 0) {
+      setPresAccountId(String(accounts[0]?.id ?? ''));
+    }
+  }, [accounts, presAccountId]);
+
+  const loadPresStatus = useCallback(
+    async (accountId: string) => {
+      if (!accountId) {
+        setPresStatus(null);
+        return;
+      }
+      try {
+        setPresStatus(await getAdminPresentationStatus(userId, accountId));
+      } catch {
+        setPresStatus(null);
+      }
+    },
+    [userId],
+  );
+
+  useEffect(() => {
+    void loadPresStatus(presAccountId);
+  }, [presAccountId, loadPresStatus]);
+
+  const runGenerate = (replace: boolean) => {
+    setPresConfirmOpen(false);
+    void run(
+      async () => {
+        await generateAdminPresentation(userId, {
+          accountId: presAccountId,
+          targetBalance: presTarget,
+          replace,
+        });
+        await loadPresStatus(presAccountId);
+      },
+      replace ? 'Presentation activity replaced.' : 'Presentation activity generated.',
+    );
+  };
 
   const run = async (action: () => Promise<unknown>, message: string) => {
     setBusy(true);
@@ -291,6 +349,92 @@ export default function AdminCustomerDetailPage() {
         </CardContent>
       </Card>
 
+      {/* Presentation activity generator */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Presentation activity</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-slate-600">
+            Generate a realistic six-month account history for this customer. Records are written
+            through the live transaction ledger, so the balance and history appear naturally across
+            the customer&apos;s dashboard, accounts and transactions.
+          </p>
+
+          {accounts.length === 0 ? (
+            <p className="text-sm text-slate-600">Create an account first to generate activity.</p>
+          ) : (
+            <>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Target account</label>
+                  <Select value={presAccountId} onChange={(event) => setPresAccountId(event.target.value)}>
+                    {accounts.map((acc) => {
+                      const id = String(acc.id ?? '');
+                      return (
+                        <option key={id} value={id}>
+                          ••{String(acc.accountNumber ?? '').slice(-4)} · {String(acc.type ?? '—')}
+                        </option>
+                      );
+                    })}
+                  </Select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Final balance</label>
+                  <Input value={presTarget} onChange={(event) => setPresTarget(event.target.value)} />
+                </div>
+              </div>
+
+              {presStatus ? (
+                <div className="grid gap-3 rounded-md bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Current balance</p>
+                    <p className="text-sm font-semibold text-slate-900">
+                      {formatCurrency(presStatus.currentBalance)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Transactions</p>
+                    <p className="text-sm font-semibold text-slate-900">{presStatus.transactionCount}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Generated credits</p>
+                    <p className="text-sm font-semibold text-emerald-700">
+                      {formatCurrency(presStatus.presentationCredits)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Generated debits</p>
+                    <p className="text-sm font-semibold text-rose-700">
+                      {formatCurrency(presStatus.presentationDebits)}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+
+              {presStatus?.presentationExists ? (
+                <div className="space-y-2">
+                  <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                    Presentation activity already exists for this account
+                    {presStatus.generatedAt
+                      ? ` (generated ${new Date(presStatus.generatedAt).toLocaleDateString()})`
+                      : ''}
+                    . Regenerating will replace only the generated records.
+                  </p>
+                  <Button variant="secondary" disabled={busy} onClick={() => setPresConfirmOpen(true)}>
+                    Replace presentation activity
+                  </Button>
+                </div>
+              ) : (
+                <Button disabled={busy || !presAccountId} onClick={() => setPresConfirmOpen(true)}>
+                  Generate account activity
+                </Button>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Audit */}
       <Card>
         <CardHeader>
@@ -380,6 +524,68 @@ export default function AdminCustomerDetailPage() {
               }}
             >
               Create account
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Generate presentation activity confirmation */}
+      <Modal
+        open={presConfirmOpen}
+        title={
+          presStatus?.presentationExists
+            ? 'Replace presentation activity'
+            : 'Generate presentation activity'
+        }
+        onClose={() => setPresConfirmOpen(false)}
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-slate-600">
+            Generate six months of account activity for this customer?
+          </p>
+          <dl className="space-y-2 rounded-md bg-slate-50 p-3 text-sm">
+            <div className="flex justify-between">
+              <dt className="text-slate-500">Customer</dt>
+              <dd className="font-medium text-slate-900">
+                {detail.firstName} {detail.lastName}
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-slate-500">Account</dt>
+              <dd className="font-medium text-slate-900">
+                {presStatus
+                  ? `••${presStatus.accountNumber.slice(-4)} · ${presStatus.accountName}`
+                  : '—'}
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-slate-500">Final balance</dt>
+              <dd className="font-medium text-slate-900">{formatCurrency(presTarget)}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-slate-500">History period</dt>
+              <dd className="font-medium text-slate-900">6 months ending today</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-slate-500">Transactions</dt>
+              <dd className="font-medium text-slate-900">approximately 40–70</dd>
+            </div>
+          </dl>
+          {presStatus?.presentationExists ? (
+            <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Existing generated records will be removed and regenerated atomically. Genuine records
+              are never deleted.
+            </p>
+          ) : null}
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setPresConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={busy || !presAccountId}
+              onClick={() => runGenerate(Boolean(presStatus?.presentationExists))}
+            >
+              {presStatus?.presentationExists ? 'Confirm replace' : 'Confirm generate'}
             </Button>
           </div>
         </div>

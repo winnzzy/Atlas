@@ -572,6 +572,56 @@ export async function releaseAdminAccountRestriction(accountId: string) {
   });
 }
 
+// ── Admin presentation activity generator ───────────────────────────────────
+
+export type AdminPresentationStatus = {
+  accountId: string;
+  accountNumber: string;
+  accountName: string;
+  currency: string;
+  status: string;
+  currentBalance: string;
+  availableBalance: string;
+  transactionCount: number;
+  presentationExists: boolean;
+  presentationCount: number;
+  presentationCredits: string;
+  presentationDebits: string;
+  presentationNet: string;
+  presentationBatchId: string | null;
+  generatedAt: string | null;
+};
+
+export type AdminPresentationResult = {
+  accountId: string;
+  batchId: string;
+  transactionCount: number;
+  openingBalance: string;
+  finalBalance: string;
+  totalCredits: string;
+  totalDebits: string;
+  periodStart: string;
+  periodEnd: string;
+  replaced: boolean;
+};
+
+export async function getAdminPresentationStatus(userId: string, accountId: string) {
+  return requestJson<AdminPresentationStatus>(
+    `/api/v1/admin/customers/${userId}/presentation${query({ accountId })}`,
+  );
+}
+
+export async function generateAdminPresentation(
+  userId: string,
+  input: { accountId: string; targetBalance?: string; months?: number; replace?: boolean },
+) {
+  return postJson<AdminPresentationResult>(
+    `/api/v1/admin/customers/${userId}/presentation`,
+    input,
+    'POST',
+  );
+}
+
 // ── Bank directory (sandbox until a provider is connected) ──────────────────
 
 export type BankDirectoryEntry = { id: string; name: string; routingNumber: string; sandbox: boolean };

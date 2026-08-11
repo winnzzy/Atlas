@@ -17,6 +17,7 @@ export {
   CardAdminActionDto,
   CustomerQueryDto,
   CustomerStatusActionDto,
+  GeneratePresentationDto,
   InvestmentAdminActionDto,
   KycDecisionDto,
   NotificationQueueQueryDto,

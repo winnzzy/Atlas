@@ -3,6 +3,7 @@ import type { AccountService } from '../../../accounts/services/account.service'
 import type { NotificationService } from '../../../notifications/services/notification.service';
 import type { PrismaService } from '../../../prisma/prisma.service';
 import { AdminCustomerService } from '../admin-customer.service';
+import type { AdminPresentationService } from '../admin-presentation.service';
 
 const CUSTOMER = {
   id: 'user-1',
@@ -52,12 +53,28 @@ function build(prisma: ReturnType<typeof buildPrisma>) {
     releaseRestriction: jest.fn().mockResolvedValue({ id: 'acc-1', status: 'ACTIVE' }),
   };
   const notificationService = { notifyDirect: jest.fn().mockResolvedValue(null) };
+  const presentationService = {
+    getStatus: jest.fn().mockResolvedValue({ presentationExists: false }),
+    generate: jest.fn().mockResolvedValue({
+      accountId: 'acc-1',
+      batchId: 'batch-1',
+      transactionCount: 42,
+      openingBalance: '0.00',
+      finalBalance: '4700000.00',
+      totalCredits: '4800000.00',
+      totalDebits: '100000.00',
+      periodStart: '2026-02-11T00:00:00.000Z',
+      periodEnd: '2026-08-11T00:00:00.000Z',
+      replaced: false,
+    }),
+  };
   const service = new AdminCustomerService(
     prisma as unknown as PrismaService,
     accountService as unknown as AccountService,
     notificationService as unknown as NotificationService,
+    presentationService as unknown as AdminPresentationService,
   );
-  return { service, accountService, notificationService };
+  return { service, accountService, notificationService, presentationService };
 }
 
 describe('AdminCustomerService', () => {
@@ -148,6 +165,29 @@ describe('AdminCustomerService', () => {
     );
     expect(notificationService.notifyDirect).toHaveBeenCalled();
     expect(account.id).toBe('acc-1');
+  });
+
+  it('generates presentation activity and records an audit action', async () => {
+    const prisma = buildPrisma();
+    const { service, presentationService } = build(prisma);
+
+    const result = await service.generatePresentation('admin-1', 'user-1', { accountId: 'acc-1' });
+
+    expect(presentationService.generate).toHaveBeenCalledWith('user-1', { accountId: 'acc-1' });
+    expect(prisma.adminAction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: 'PRESENTATION_GENERATE',
+          adminUserId: 'admin-1',
+          resourceId: 'acc-1',
+          details: expect.objectContaining({
+            targetBalance: '4700000.00',
+            transactionCount: 42,
+          }),
+        }),
+      }),
+    );
+    expect(result.finalBalance).toBe('4700000.00');
   });
 
   it('applies and releases an account restriction with audit + notification', async () => {

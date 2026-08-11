@@ -327,6 +327,30 @@ export class AssignAccountDto {
   nickname?: string;
 }
 
+export class GeneratePresentationDto {
+  @ApiProperty({ description: 'Target account to generate activity for' })
+  @IsUUID()
+  accountId!: string;
+
+  @ApiPropertyOptional({ description: 'Closing balance, defaults to 4700000.00' })
+  @IsOptional()
+  @IsString()
+  targetBalance?: string;
+
+  @ApiPropertyOptional({ description: 'History length in months (1-12), defaults to 6' })
+  @IsOptional()
+  @Transform(({ value }) => Number(value))
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  months?: number;
+
+  @ApiPropertyOptional({ description: 'Replace existing presentation activity atomically' })
+  @IsOptional()
+  @IsBoolean()
+  replace?: boolean;
+}
+
 export class AccountRestrictionDto {
   @ApiProperty()
   @IsString()

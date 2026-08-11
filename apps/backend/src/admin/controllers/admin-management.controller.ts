@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@ne
 import type { NotificationChannel, NotificationType } from '@prisma/client';
 import { SearchTransactionsDto } from '../../transactions/dto/search-transactions.dto';
 import { SearchTransfersDto } from '../../transfers/dto/search-transfers.dto';
-import { AccountAdminActionDto, AccountRestrictionDto, AssignAccountDto, CardAdminActionDto, CustomerQueryDto, CustomerStatusActionDto, InvestmentAdminActionDto, KycDecisionDto, NotificationQueueQueryDto, UpdateCustomerDto } from '../dto';
+import { AccountAdminActionDto, AccountRestrictionDto, AssignAccountDto, CardAdminActionDto, CustomerQueryDto, CustomerStatusActionDto, GeneratePresentationDto, InvestmentAdminActionDto, KycDecisionDto, NotificationQueueQueryDto, UpdateCustomerDto } from '../dto';
 import type { AdminRole } from '../dto';
 import { AdminAuthGuard } from '../guards/admin-auth.guard';
 import { AdminPolicy } from '../policies/admin.policy';
@@ -141,6 +141,29 @@ export class AdminManagementController {
   getCustomerAudit(@Headers('x-admin-role') role: AdminRole, @Param('userId') userId: string) {
     this.policy.assertAllowed(role, 'customer.manage');
     return this.customerService.getCustomerAudit(userId);
+  }
+
+  @Get('customers/:userId/presentation')
+  @ApiOperation({ summary: 'Presentation-activity status for a customer account' })
+  getPresentationStatus(
+    @Headers('x-admin-role') role: AdminRole,
+    @Param('userId') userId: string,
+    @Query('accountId') accountId: string,
+  ) {
+    this.policy.assertAllowed(role, 'transaction.manage');
+    return this.customerService.getPresentationStatus(userId, accountId);
+  }
+
+  @Post('customers/:userId/presentation')
+  @ApiOperation({ summary: 'Generate/replace six months of account activity (audited)' })
+  generatePresentation(
+    @Headers('x-admin-role') role: AdminRole,
+    @Headers('x-admin-id') adminId: string,
+    @Param('userId') userId: string,
+    @Body() body: GeneratePresentationDto,
+  ) {
+    this.policy.assertAllowed(role, 'transaction.manage');
+    return this.customerService.generatePresentation(adminId, userId, body);
   }
 
   @Patch('accounts/:accountId/restriction')
