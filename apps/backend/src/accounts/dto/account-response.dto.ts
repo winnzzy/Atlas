@@ -109,8 +109,6 @@ export class AccountResponseDto {
   })
   closureReason!: ClosureReasonType | null;
 
-  @ApiProperty({ description: 'Whether this is a demo account' })
-  isDemo!: boolean;
 
   static fromPrisma(
     account: {
@@ -134,7 +132,6 @@ export class AccountResponseDto {
       freezeNote: string | null;
       closedAt: Date | null;
       closureReason: ClosureReasonType | null;
-      isDemo: boolean;
       createdAt: Date;
       updatedAt: Date;
     },
@@ -168,7 +165,6 @@ export class AccountResponseDto {
     dto.updatedAt = account.updatedAt.toISOString();
     dto.closedAt = account.closedAt ? account.closedAt.toISOString() : null;
     dto.closureReason = account.closureReason;
-    dto.isDemo = account.isDemo;
     return dto;
   }
 }

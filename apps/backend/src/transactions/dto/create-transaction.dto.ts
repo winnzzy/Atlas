@@ -83,10 +83,6 @@ export class CreateTransactionDto {
   @MaxLength(20)
   counterpartyAccount?: string;
 
-  @ApiPropertyOptional({ description: 'Whether this is a demo transaction', default: false })
-  @IsOptional()
-  isDemo?: boolean;
-
   @ApiPropertyOptional({ description: 'SWIFT code for international wires' })
   @IsOptional()
   @IsString()

@@ -57,8 +57,6 @@ tags:
     description: Notifications inbox and delivery preferences.
   - name: Admin
     description: Administrative and compliance management interfaces.
-  - name: Demo Mode
-    description: Sandbox lifecycle controls for demonstration environments.
   - name: Health
     description: Service health and readiness checks.
   - name: Settings
@@ -2114,109 +2112,6 @@ paths:
                       meta:
                         $ref: '#/components/schemas/OffsetMeta'
 
-  /demo-mode/state:
-    get:
-      tags: [Demo Mode]
-      summary: Get demo mode state
-      description: |
-        Returns current demo mode state and expiration.
-
-        Permissions: admin:demo:read
-        Rate limit: 600 requests / hour per admin user
-      operationId: getDemoModeState
-      x-permissions: [admin:demo:read]
-      x-rateLimit:
-        scope: user
-        burst: 600
-        window: 1h
-      responses:
-        '200':
-          description: Demo mode state returned.
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: '#/components/schemas/ApiEnvelope'
-                  - type: object
-                    properties:
-                      data:
-                        $ref: '#/components/schemas/DemoModeState'
-
-  /demo-mode/enable:
-    post:
-      tags: [Demo Mode]
-      summary: Enable demo mode
-      description: |
-        Enables demo mode for a specified duration.
-
-        Permissions: admin:demo:write
-        Rate limit: 20 requests / hour per admin user
-      operationId: enableDemoMode
-      x-permissions: [admin:demo:write]
-      x-rateLimit:
-        scope: user
-        burst: 20
-        window: 1h
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DemoModeEnableRequest'
-      responses:
-        '200':
-          description: Demo mode enabled.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiEnvelope'
-
-  /demo-mode/disable:
-    post:
-      tags: [Demo Mode]
-      summary: Disable demo mode
-      description: |
-        Disables demo mode.
-
-        Permissions: admin:demo:write
-        Rate limit: 20 requests / hour per admin user
-      operationId: disableDemoMode
-      x-permissions: [admin:demo:write]
-      x-rateLimit:
-        scope: user
-        burst: 20
-        window: 1h
-      responses:
-        '200':
-          description: Demo mode disabled.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiEnvelope'
-
-  /demo-mode/reset:
-    post:
-      tags: [Demo Mode]
-      summary: Reset demo data
-      description: |
-        Resets all demo data to baseline fixtures.
-
-        Permissions: admin:demo:write
-        Rate limit: 5 requests / hour per admin user
-      operationId: resetDemoMode
-      x-permissions: [admin:demo:write]
-      x-rateLimit:
-        scope: user
-        burst: 5
-        window: 1h
-      responses:
-        '202':
-          description: Demo reset job accepted.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiEnvelope'
-
   /health:
     get:
       tags: [Health]
@@ -3686,27 +3581,6 @@ components:
         createdAt:
           type: string
           format: date-time
-
-    DemoModeState:
-      type: object
-      properties:
-        enabled:
-          type: boolean
-        expiresAt:
-          type: string
-          format: date-time
-        scenario:
-          type: string
-    DemoModeEnableRequest:
-      type: object
-      required: [scenario, durationMinutes]
-      properties:
-        scenario:
-          type: string
-        durationMinutes:
-          type: integer
-          minimum: 10
-          maximum: 10080
 
     HealthStatus:
       type: object

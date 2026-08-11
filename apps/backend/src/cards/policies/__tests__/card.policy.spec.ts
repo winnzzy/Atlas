@@ -36,7 +36,7 @@ describe('CardPolicy', () => {
         onlineEnabled: true,
         internationalEnabled: true,
         atmEnabled: true,
-        isDemo: true,
+        isDemo: false,
         createdAt: new Date(),
         updatedAt: new Date(),
       },

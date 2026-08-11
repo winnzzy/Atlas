@@ -658,8 +658,7 @@ export class AccountService {
     freezeReason: string | null;
     freezeNote: string | null;
     closedAt: Date | null;
-    closureReason: string | null;
-    isDemo: boolean;
+    closureReason: string | null;
     createdAt: Date;
     updatedAt: Date;
   }): AccountResponseDto {
@@ -683,8 +682,7 @@ export class AccountService {
       freezeReason: account.freezeReason as FreezeReasonType | null,
       freezeNote: account.freezeNote,
       closedAt: account.closedAt,
-      closureReason: account.closureReason as ClosureReasonType | null,
-      isDemo: account.isDemo,
+      closureReason: account.closureReason as ClosureReasonType | null,
       createdAt: account.createdAt,
       updatedAt: account.updatedAt,
     });
