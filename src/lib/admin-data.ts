@@ -12,6 +12,7 @@ export type AdminOverview = {
   activeAccounts: number;
   totalDeposits: number;
   totalTransfers: number;
+  totalInvestments: number;
   pendingApprovals: number;
   pendingNotifications: number;
   dailyVolume: number;
@@ -85,6 +86,7 @@ export function toOverview(raw: Record<string, unknown> | null): AdminOverview |
     activeAccounts: num(raw.activeAccounts),
     totalDeposits: num(raw.totalDeposits),
     totalTransfers: num(raw.totalTransfers),
+    totalInvestments: num(raw.totalInvestments),
     pendingApprovals: num(raw.pendingApprovals),
     pendingNotifications: num(raw.pendingNotifications),
     dailyVolume: num(raw.dailyVolume),
@@ -149,16 +151,18 @@ async function settle<T>(promise: Promise<T>): Promise<T | null> {
 }
 
 export async function loadAdminDashboard() {
-  const [overview, customers, transfers] = await Promise.all([
+  const [overview, customers, transfers, audit] = await Promise.all([
     settle(getAdminOverview()),
     settle(getAdminCustomers({ limit: 8 })),
-    settle(getAdminTransfers({ limit: 10 })),
+    settle(getAdminTransfers({ limit: 8 })),
+    settle(getAdminAuditLogs({ limit: 6 })),
   ]);
 
   return {
     overview: toOverview(overview),
     customers: toCustomers(customers?.items ?? []),
     transfers: toTransfers(transfers?.items ?? []),
+    audit: toAuditRows(audit?.items ?? []),
   };
 }
 

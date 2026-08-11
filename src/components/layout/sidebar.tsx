@@ -1,15 +1,18 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  ArrowRightLeft,
   Bell,
-  BarChart3,
   CreditCard,
+  FileBarChart,
   Landmark,
   LayoutGrid,
+  LineChart,
   LogOut,
+  Receipt,
   Settings,
   ShieldCheck,
-  TrendingUp,
+  UserRound,
   Users,
 } from 'lucide-react';
 import { useAuth } from '@/providers/auth-provider';
@@ -18,22 +21,22 @@ import { cn } from '@/lib/utils';
 const customerItems = [
   { href: '/dashboard', label: 'Overview', icon: LayoutGrid },
   { href: '/dashboard/accounts', label: 'Accounts', icon: Landmark },
-  { href: '/dashboard/transactions', label: 'Transactions', icon: BarChart3 },
-  { href: '/dashboard/transfers', label: 'Transfers', icon: TrendingUp },
+  { href: '/dashboard/transactions', label: 'Transactions', icon: Receipt },
+  { href: '/dashboard/transfers', label: 'Transfers', icon: ArrowRightLeft },
   { href: '/dashboard/cards', label: 'Cards', icon: CreditCard },
-  { href: '/dashboard/investments', label: 'Investments', icon: TrendingUp },
+  { href: '/dashboard/investments', label: 'Investments', icon: LineChart },
   { href: '/dashboard/notifications', label: 'Notifications', icon: Bell },
-  { href: '/dashboard/profile', label: 'Profile', icon: ShieldCheck },
+  { href: '/dashboard/profile', label: 'Profile', icon: UserRound },
 ];
 
 const adminItems = [
   { href: '/admin', label: 'Overview', icon: LayoutGrid },
   { href: '/admin/customers', label: 'Customers', icon: Users },
   { href: '/admin/accounts', label: 'Accounts', icon: Landmark },
-  { href: '/admin/transactions', label: 'Transactions', icon: BarChart3 },
-  { href: '/admin/transfers', label: 'Transfers', icon: TrendingUp },
+  { href: '/admin/transactions', label: 'Transactions', icon: Receipt },
+  { href: '/admin/transfers', label: 'Transfers', icon: ArrowRightLeft },
   { href: '/admin/cards', label: 'Cards', icon: CreditCard },
-  { href: '/admin/reports', label: 'Reports', icon: BarChart3 },
+  { href: '/admin/reports', label: 'Reports', icon: FileBarChart },
   { href: '/admin/audit', label: 'Audit', icon: ShieldCheck },
   { href: '/admin/settings', label: 'Settings', icon: Settings },
 ];

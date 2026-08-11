@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -91,7 +90,7 @@ export default function AdminCardsPage() {
   };
 
   return (
-    <DashboardLayout>
+    <>
       <Card>
         <CardHeader>
           <CardTitle>Card operations</CardTitle>
@@ -202,6 +201,6 @@ export default function AdminCardsPage() {
           </AdminState>
         </CardContent>
       </Card>
-    </DashboardLayout>
+    </>
   );
 }

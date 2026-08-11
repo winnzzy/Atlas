@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { CreditCard } from 'lucide-react';
-import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -104,7 +103,7 @@ export default function CardsPage() {
   };
 
   return (
-    <DashboardLayout>
+    <>
       <div className="space-y-6">
         {error ? (
           <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
@@ -236,6 +235,6 @@ export default function CardsPage() {
           ))
         )}
       </div>
-    </DashboardLayout>
+    </>
   );
 }

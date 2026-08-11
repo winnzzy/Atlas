@@ -109,6 +109,42 @@ export type ProfileSummary = {
   };
 };
 
+export type CustomerProfileResponse = {
+  id?: string;
+  avatarInitials?: string;
+  personalInformation?: {
+    firstName?: string;
+    lastName?: string;
+    fullName?: string;
+    dateOfBirth?: string;
+    ssnLast4?: string;
+  };
+  contactInformation?: {
+    email?: string;
+    phoneNumber?: string;
+    emailVerified?: boolean;
+    phoneVerified?: boolean;
+  };
+  address?: {
+    line1?: string;
+    line2?: string;
+    city?: string;
+    state?: string;
+    postalCode?: string;
+    country?: string;
+  };
+  verification?: {
+    kycStatus?: string;
+    kycLevel?: string;
+    overallStatus?: string;
+    emailVerified?: boolean;
+    phoneVerified?: boolean;
+  };
+  preferredCurrency?: string;
+  preferredLanguage?: string;
+  timezone?: string;
+};
+
 function getApiBaseUrl() {
   return API_BASE_URL.replace(/\/$/, '');
 }
@@ -295,6 +331,10 @@ export async function getNotifications() {
   return unwrapItems<NotificationSummary>(payload);
 }
 
+export async function markNotificationRead(id: string) {
+  return requestJson<NotificationSummary>(`/api/v1/notifications/${id}/read`, { method: 'PATCH' });
+}
+
 export async function getPortfolio() {
   return requestJson<PortfolioSummary>('/api/v1/investments/portfolio');
 }
@@ -354,8 +394,12 @@ export async function unfreezeCard(cardId: string) {
   return postJson<CardSummary>(`/api/v1/cards/${cardId}/unfreeze`, {});
 }
 
+export async function getCustomerProfile() {
+  return requestJson<CustomerProfileResponse>('/api/v1/profile');
+}
+
 export async function updateProfile(input: Record<string, unknown>) {
-  return postJson<ProfileSummary>('/api/v1/profile', input, 'PATCH');
+  return postJson<CustomerProfileResponse>('/api/v1/profile', input, 'PATCH');
 }
 
 export async function updatePreferences(input: Record<string, unknown>) {

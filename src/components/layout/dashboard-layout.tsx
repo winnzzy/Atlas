@@ -15,11 +15,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!ready) return;
+    const onAdminRoute = window.location.pathname.startsWith('/admin');
     if (!isAuthenticated) {
-      router.replace('/login');
+      // Send unauthenticated admin-area visitors to the admin sign-in.
+      router.replace(onAdminRoute ? '/admin/login' : '/login');
       return;
     }
-    if (window.location.pathname.startsWith('/admin') && !isAdmin) {
+    if (onAdminRoute && !isAdmin) {
       router.replace('/dashboard');
     }
   }, [isAuthenticated, isAdmin, ready, router]);

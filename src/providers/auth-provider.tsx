@@ -24,6 +24,8 @@ type AuthContextValue = {
   isAuthenticated: boolean;
   isAdmin: boolean;
   login: (email: string, password: string) => Promise<boolean>;
+  /** Authenticate and load the session without navigating; callers route. */
+  authenticate: (email: string, password: string) => Promise<{ ok: boolean; isAdmin: boolean }>;
   logout: () => Promise<void>;
   ready: boolean;
 };
@@ -96,24 +98,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void bootstrap();
   }, []);
 
-  const login = async (email: string, password: string) => {
+  // Authenticate and hydrate session state. Does not navigate — the caller
+  // decides where to go, so admin and customer entry points can differ.
+  const authenticate = async (email: string, password: string) => {
     try {
       const session = await loginWithEmailPassword(email, password);
       const accessToken = session?.accessToken;
       if (!accessToken) {
-        return false;
+        return { ok: false, isAdmin: false };
       }
 
       setStoredAccessToken(accessToken);
       const { nextAdmin } = await loadSession();
-      router.replace(nextAdmin ? '/admin' : '/dashboard');
-      return true;
+      return { ok: true, isAdmin: Boolean(nextAdmin) };
     } catch {
       setStoredAccessToken(null);
       setUser(null);
       setAdmin(null);
-      return false;
+      return { ok: false, isAdmin: false };
     }
+  };
+
+  const login = async (email: string, password: string) => {
+    const result = await authenticate(email, password);
+    if (result.ok) {
+      router.replace(result.isAdmin ? '/admin' : '/dashboard');
+    }
+    return result.ok;
   };
 
   const logout = async () => {
@@ -136,6 +147,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isAuthenticated: Boolean(user),
       isAdmin: Boolean(admin),
       login,
+      authenticate,
       logout,
       ready,
     }),

@@ -1,6 +1,5 @@
 'use client';
 
-import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AdminState, useAdminResource } from '@/components/admin/admin-panel';
 import { formatCount, formatCurrency } from '@/lib/admin-data';
@@ -30,7 +29,7 @@ export default function AdminReportsPage() {
   const sections = Object.entries(data ?? {});
 
   return (
-    <DashboardLayout>
+    <>
       <div className="space-y-6">
         <AdminState
           loading={loading}
@@ -68,6 +67,6 @@ export default function AdminReportsPage() {
           </div>
         </AdminState>
       </div>
-    </DashboardLayout>
+    </>
   );
 }

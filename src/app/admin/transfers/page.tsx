@@ -1,6 +1,5 @@
 'use client';
 
-import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, Tbody, Td, Th, Thead, Tr } from '@/components/ui/table';
@@ -18,7 +17,7 @@ export default function AdminTransfersPage() {
   const transfers = data ?? [];
 
   return (
-    <DashboardLayout>
+    <>
       <Card>
         <CardHeader>
           <CardTitle>Transfer operations</CardTitle>
@@ -57,6 +56,6 @@ export default function AdminTransfersPage() {
           </AdminState>
         </CardContent>
       </Card>
-    </DashboardLayout>
+    </>
   );
 }
