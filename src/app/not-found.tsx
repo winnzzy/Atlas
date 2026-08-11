@@ -9,7 +9,7 @@ export default function NotFound() {
         <CardContent className="space-y-4">
           <h1 className="text-3xl font-semibold text-slate-900">Page not found</h1>
           <p className="text-sm text-slate-500">
-            The requested route is not available in the simplified Atlas demo.
+            The requested route is not available.
           </p>
           <Button asChild>
             <Link href="/">Return home</Link>

@@ -11,7 +11,7 @@ export default function Error({ reset }: { reset: () => void }) {
         <CardContent className="space-y-4">
           <h1 className="text-3xl font-semibold text-slate-900">Something went wrong</h1>
           <p className="text-sm text-slate-500">
-            The Atlas demo could not complete that request. Please try again.
+            Atlas could not complete that request. Please try again.
           </p>
           <div className="flex justify-center gap-3">
             <Button onClick={reset}>Try again</Button>

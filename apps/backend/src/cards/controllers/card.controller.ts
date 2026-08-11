@@ -24,10 +24,14 @@ export class CardController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Issue a card' })
+  @ApiOperation({
+    summary: 'Apply for a card',
+    description:
+      'Records a card application in REQUESTED status. An administrator must approve it before the card can be used.',
+  })
   @ApiResponse({ status: HttpStatus.CREATED, type: CardResponseDto })
   issueCard(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateCardDto): Promise<CardResponseDto> {
-    return this.cardService.issueCard(user, dto);
+    return this.cardService.issueCard(user, dto, { requiresApproval: true });
   }
 
   @Get(':cardId')

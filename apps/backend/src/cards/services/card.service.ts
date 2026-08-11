@@ -46,7 +46,11 @@ export class CardService {
     @Inject(EventEmitter2) private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  async issueCard(user: AuthenticatedUser, dto: CreateCardDto): Promise<CardResponseDto> {
+  async issueCard(
+    user: AuthenticatedUser,
+    dto: CreateCardDto,
+    options?: { requiresApproval?: boolean },
+  ): Promise<CardResponseDto> {
     const account = await this.accountService.findById(dto.accountId);
     if (!account) {
       throw new CardValidationException(`Account ${dto.accountId} not found`);
@@ -70,7 +74,13 @@ export class CardService {
     const expiry = this.calculateExpiryDate();
     const cvv = this.validator.generateCvv();
     const isVirtual = dto.type !== CardType.PHYSICAL_DEBIT;
-    const status = dto.type === CardType.PHYSICAL_DEBIT ? CardStatus.PENDING_VERIFICATION : CardStatus.ISSUED;
+    // A customer-initiated request is only an application: it holds at REQUESTED
+    // until an administrator approves it. Admin-initiated issuance skips ahead.
+    const status = options?.requiresApproval
+      ? CardStatus.REQUESTED
+      : dto.type === CardType.PHYSICAL_DEBIT
+        ? CardStatus.PENDING_VERIFICATION
+        : CardStatus.ISSUED;
 
     const card: CardRecord = {
       id: randomUUID(),
@@ -196,6 +206,51 @@ export class CardService {
     await this.repository.updateCard(card);
     this.audit('ACTIVATE', card, user.id);
     this.emit(CARD_EVENT_NAMES.ACTIVATED, { cardId: card.id, accountId: card.accountId, customerId: card.customerId, performedBy: user.id, status: card.status });
+    return this.mapper.toCardResponse(card);
+  }
+
+  /**
+   * Approves a pending card application. Physical cards still need the
+   * verification step, so they land on PENDING_VERIFICATION rather than ISSUED.
+   */
+  async approveCardApplication(user: AuthenticatedUser, cardId: string, reviewerId: string): Promise<CardResponseDto> {
+    const card = await this.findCardOrThrow(cardId);
+    this.ensureTransition(card, [CardStatus.REQUESTED]);
+    card.status =
+      card.type === CardType.PHYSICAL_DEBIT ? CardStatus.PENDING_VERIFICATION : CardStatus.ISSUED;
+    card.updatedAt = new Date();
+    await this.repository.updateCard(card);
+    this.audit('APPROVE', card, reviewerId);
+    this.emit(CARD_EVENT_NAMES.ISSUED, {
+      cardId: card.id,
+      accountId: card.accountId,
+      customerId: card.customerId,
+      performedBy: reviewerId,
+      cardType: card.type,
+    });
+    void user;
+    return this.mapper.toCardResponse(card);
+  }
+
+  /** Rejects a pending card application, recording why. */
+  async rejectCardApplication(user: AuthenticatedUser, cardId: string, reviewerId: string, reason?: string): Promise<CardResponseDto> {
+    const card = await this.findCardOrThrow(cardId);
+    this.ensureTransition(card, [CardStatus.REQUESTED, CardStatus.PENDING_VERIFICATION]);
+    card.status = CardStatus.CANCELLED;
+    card.closedAt = new Date();
+    card.freezeReason = reason;
+    card.updatedAt = new Date();
+    await this.repository.updateCard(card);
+    this.audit('REJECT', card, reviewerId, reason ? { reason } : undefined);
+    this.emit(CARD_EVENT_NAMES.CANCELLED, {
+      cardId: card.id,
+      accountId: card.accountId,
+      customerId: card.customerId,
+      performedBy: reviewerId,
+      status: card.status,
+      reason,
+    });
+    void user;
     return this.mapper.toCardResponse(card);
   }
 

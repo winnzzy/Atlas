@@ -179,6 +179,12 @@ export class AdminOrchestrationService {
 
     const ownerContext: AuthenticatedUser = { id: ownerId, email: `${ownerId}@atlas.local` };
 
+    if (action.action === 'APPROVE') {
+      return this.cardService.approveCardApplication(ownerContext, cardId, ADMIN_ACTOR.id);
+    }
+    if (action.action === 'REJECT') {
+      return this.cardService.rejectCardApplication(ownerContext, cardId, ADMIN_ACTOR.id, action.reason);
+    }
     if (action.action === 'FREEZE') {
       return this.cardService.freezeCard(ownerContext, cardId, action.reason);
     }

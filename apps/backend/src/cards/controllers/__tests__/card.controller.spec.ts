@@ -38,6 +38,7 @@ describe('CardController', () => {
     const result = await controller.issueCard(user, dto);
 
     expect(result).toEqual({ id: 'card-1' });
-    expect(service.issueCard).toHaveBeenCalledWith(user, dto);
+    // A customer request is an application: it must go in needing approval.
+    expect(service.issueCard).toHaveBeenCalledWith(user, dto, { requiresApproval: true });
   });
 });

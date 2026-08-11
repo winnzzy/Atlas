@@ -8,7 +8,7 @@ import { CardMapper } from '../../mappers/card.mapper';
 import { AccountService } from '../../../accounts/services/account.service';
 import { TransactionService } from '../../../transactions/services/transaction.service';
 import { LedgerService } from '../../../ledger/services/ledger.service';
-import { CardType, CardTransactionType } from '../../enums/card.enums';
+import { CardStatus, CardType, CardTransactionType } from '../../enums/card.enums';
 
 describe('CardService', () => {
   it('issues a card for a valid account holder', async () => {
@@ -42,6 +42,78 @@ describe('CardService', () => {
     expect(card.accountId).toBe('acc-1');
     expect(card.maskedNumber).toContain('•');
     expect(card).not.toHaveProperty('isDemo');
+  });
+
+  it('holds a customer application at REQUESTED until an admin approves it', async () => {
+    const accountService = {
+      findById: jest.fn().mockResolvedValue({ id: 'acc-1', status: 'ACTIVE' }),
+      isAccountHolder: jest.fn().mockResolvedValue(true),
+    };
+
+    const module = await Test.createTestingModule({
+      providers: [
+        CardService,
+        CardRepository,
+        CardPolicy,
+        CardValidator,
+        CardMapper,
+        { provide: AccountService, useValue: accountService },
+        { provide: TransactionService, useValue: { createTransaction: jest.fn() } },
+        { provide: LedgerService, useValue: { createHold: jest.fn(), releaseHold: jest.fn() } },
+        { provide: EventEmitter2, useValue: { emit: jest.fn() } },
+      ],
+    }).compile();
+
+    const service = module.get(CardService);
+    const user = { id: 'user-1' } as never;
+
+    const application = await service.issueCard(
+      user,
+      { accountId: 'acc-1', type: CardType.VIRTUAL_DEBIT } as never,
+      { requiresApproval: true },
+    );
+    expect(application.status).toBe(CardStatus.REQUESTED);
+
+    // A card awaiting review is not usable, so it cannot be frozen or activated.
+    await expect(service.freezeCard(user, application.id)).rejects.toThrow();
+
+    const approved = await service.approveCardApplication(user, application.id, 'admin-1');
+    expect(approved.status).toBe(CardStatus.ISSUED);
+  });
+
+  it('rejects a card application and closes it', async () => {
+    const accountService = {
+      findById: jest.fn().mockResolvedValue({ id: 'acc-1', status: 'ACTIVE' }),
+      isAccountHolder: jest.fn().mockResolvedValue(true),
+    };
+
+    const module = await Test.createTestingModule({
+      providers: [
+        CardService,
+        CardRepository,
+        CardPolicy,
+        CardValidator,
+        CardMapper,
+        { provide: AccountService, useValue: accountService },
+        { provide: TransactionService, useValue: { createTransaction: jest.fn() } },
+        { provide: LedgerService, useValue: { createHold: jest.fn(), releaseHold: jest.fn() } },
+        { provide: EventEmitter2, useValue: { emit: jest.fn() } },
+      ],
+    }).compile();
+
+    const service = module.get(CardService);
+    const user = { id: 'user-1' } as never;
+
+    const application = await service.issueCard(
+      user,
+      { accountId: 'acc-1', type: CardType.VIRTUAL_DEBIT } as never,
+      { requiresApproval: true },
+    );
+
+    const rejected = await service.rejectCardApplication(user, application.id, 'admin-1', 'Failed review');
+    expect(rejected.status).toBe(CardStatus.CANCELLED);
+    // A rejected application must not be approvable afterwards.
+    await expect(service.approveCardApplication(user, application.id, 'admin-1')).rejects.toThrow();
   });
 
   it('authorizes a card transaction through ledger hold and transaction service', async () => {

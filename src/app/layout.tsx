@@ -4,7 +4,7 @@ import { AuthProvider } from '@/providers/auth-provider';
 
 export const metadata: Metadata = {
   title: 'Atlas Digital Banking',
-  description: 'Simplified Atlas banking demo for Vercel deployment.',
+  description: 'Atlas digital banking.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

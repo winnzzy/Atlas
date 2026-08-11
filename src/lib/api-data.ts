@@ -33,7 +33,8 @@ export type DashboardCard = {
   id: string;
   name: string;
   maskedNumber: string;
-  status: 'ACTIVE' | 'FROZEN' | 'CANCELLED';
+  /** Raw backend card status, e.g. REQUESTED / ISSUED / ACTIVATED / FROZEN. */
+  status: string;
   limit: number;
   available: number;
 };
@@ -199,7 +200,7 @@ export async function loadDashboardData() {
         id: card.id ?? 'card-unknown',
         name: card.name ?? card.cardholderName ?? 'Atlas Card',
         maskedNumber: card.maskedNumber ?? card.last4 ?? '•••• 0000',
-        status: (card.status === 'ACTIVE' || card.status === 'FROZEN' || card.status === 'CANCELLED' ? card.status : 'ACTIVE') as 'ACTIVE' | 'FROZEN' | 'CANCELLED',
+        status: card.status ?? 'UNKNOWN',
         limit: parseBalance(card.limit ?? card.creditLimit),
         available: parseBalance(card.available ?? card.availableCredit),
       }))

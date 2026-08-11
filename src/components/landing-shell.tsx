@@ -5,18 +5,21 @@ import { ArrowRight, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { getStoredAccessToken } from '@/lib/api';
-
-type LandingUser = {
-  role: 'CUSTOMER' | 'SUPER_ADMIN';
-};
+import { getAdminIdentity, getStoredAccessToken } from '@/lib/api';
 
 export function LandingShell() {
-  const [user, setUser] = useState<LandingUser | null>(null);
+  const [user, setUser] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     const token = getStoredAccessToken();
-    setUser(token ? { role: 'CUSTOMER' } : null);
+    setUser(Boolean(token));
+    if (!token) return;
+
+    // Admin routing is decided by the server, never by a client-side guess.
+    void getAdminIdentity()
+      .then((identity) => setIsAdmin(Boolean(identity)))
+      .catch(() => setIsAdmin(false));
   }, []);
 
   return (
@@ -33,8 +36,8 @@ export function LandingShell() {
                 Secure banking, payments, cards, and investments in one workspace.
               </h1>
               <p className="max-w-xl text-lg text-slate-600">
-                A streamlined Atlas experience designed for reliable rendering, simple local demo
-                interactions, and Vercel deployment.
+                Open an account, move money, manage cards, and track investments — all backed by a
+                real double-entry ledger.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -47,7 +50,7 @@ export function LandingShell() {
             </div>
             {user ? (
               <Link
-                href={user.role === 'SUPER_ADMIN' ? '/admin' : '/dashboard'}
+                href={isAdmin ? '/admin' : '/dashboard'}
                 className="inline-flex items-center gap-2 text-sm font-semibold text-[#0f4c81]"
               >
                 Go to dashboard <ArrowRight className="h-4 w-4" />
@@ -56,11 +59,11 @@ export function LandingShell() {
           </div>
           <div className="rounded-[28px] border border-slate-200 bg-slate-50/80 p-6">
             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-slate-500">
-              Development access
+              Built for security
             </p>
             <p className="mt-4 text-sm text-slate-600">
-              Demo sign-in is available for local testing and walkthroughs without exposing account
-              credentials on the public landing experience.
+              Every balance, transfer, and card action is authorized server-side and recorded against
+              the ledger. Sign in to see your own accounts.
             </p>
           </div>
         </CardContent>

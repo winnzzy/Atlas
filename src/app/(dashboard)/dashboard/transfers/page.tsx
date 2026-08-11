@@ -55,7 +55,6 @@ export default function TransfersPage() {
     void refresh()
       .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : 'Unable to load transfers'))
       .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSubmit = async (event: React.FormEvent) => {

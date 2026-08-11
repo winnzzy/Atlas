@@ -346,6 +346,14 @@ export async function applyForCard(input: CardApplicationInput) {
   return postJson<CardSummary>('/api/v1/cards', input);
 }
 
+export async function freezeCard(cardId: string, reason?: string) {
+  return postJson<CardSummary>(`/api/v1/cards/${cardId}/freeze`, { reason });
+}
+
+export async function unfreezeCard(cardId: string) {
+  return postJson<CardSummary>(`/api/v1/cards/${cardId}/unfreeze`, {});
+}
+
 export async function updateProfile(input: Record<string, unknown>) {
   return postJson<ProfileSummary>('/api/v1/profile', input, 'PATCH');
 }
@@ -444,7 +452,7 @@ export async function applyAdminAccountAction(accountId: string, action: AdminAc
 }
 
 export type AdminCardAction = {
-  action: 'ISSUE' | 'FREEZE' | 'UNFREEZE' | 'REPLACE' | 'CANCEL';
+  action: 'ISSUE' | 'APPROVE' | 'REJECT' | 'FREEZE' | 'UNFREEZE' | 'REPLACE' | 'CANCEL';
   reason?: string;
   accountId?: string;
   cardType?: string;
