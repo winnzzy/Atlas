@@ -14,7 +14,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
-    "admin:provision": "node scripts/provision-admin.js",
+    "admin:provision": "tsx scripts/provision-admin.ts",
     "clean": "rm -rf dist"
   },
   "dependencies": {
