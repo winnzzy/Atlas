@@ -162,14 +162,24 @@ export class CustomerStatusActionDto {
 }
 
 export class AccountAdminActionDto {
-  @ApiProperty({ enum: ['FREEZE', 'UNFREEZE', 'LOCK', 'UNLOCK', 'CLOSE', 'ARCHIVE'] })
+  @ApiProperty({ enum: ['FREEZE', 'UNFREEZE', 'LOCK', 'UNLOCK', 'CLOSE', 'ARCHIVE', 'CREDIT', 'DEBIT'] })
   @IsString()
-  action!: 'FREEZE' | 'UNFREEZE' | 'LOCK' | 'UNLOCK' | 'CLOSE' | 'ARCHIVE';
+  action!: 'FREEZE' | 'UNFREEZE' | 'LOCK' | 'UNLOCK' | 'CLOSE' | 'ARCHIVE' | 'CREDIT' | 'DEBIT';
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   reason?: string;
+
+  @ApiPropertyOptional({ description: 'Amount for CREDIT/DEBIT actions' })
+  @IsOptional()
+  @IsString()
+  amount?: string;
+
+  @ApiPropertyOptional({ description: 'Unique reference for CREDIT/DEBIT actions' })
+  @IsOptional()
+  @IsString()
+  reference?: string;
 }
 
 export class CardAdminActionDto {

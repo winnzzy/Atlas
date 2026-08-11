@@ -14,6 +14,7 @@ import type { CreateWalletDto } from '../../investments/dto/wallet.dto';
 import { NotificationService } from '../../notifications/services/notification.service';
 import { NotificationTemplateService } from '../../notifications/services/notification-template.service';
 import { TransactionService } from '../../transactions/services/transaction.service';
+import { TransactionType } from '../../transactions/enums/transaction-type.enum';
 import type { SearchTransactionsDto } from '../../transactions/dto/search-transactions.dto';
 import { TransferService } from '../../transfers/services/transfer.service';
 import type { SearchTransfersDto } from '../../transfers/dto/search-transfers.dto';
@@ -108,6 +109,25 @@ export class AdminOrchestrationService {
   }
 
   async applyAccountAction(accountId: string, action: AccountAdminActionDto): Promise<unknown> {
+    if (action.action === 'CREDIT' || action.action === 'DEBIT') {
+      if (!action.amount || !action.reason || !action.reference) {
+        throw new NotFoundException('amount, reason, and reference are required for admin money operations');
+      }
+
+      return this.transactionService.createTransaction({
+        accountId,
+        type: action.action === 'CREDIT' ? TransactionType.DEPOSIT : TransactionType.WITHDRAWAL,
+        amount: action.amount,
+        currency: 'USD',
+        description: `Admin ${action.action.toLowerCase()}: ${action.reason}`,
+        reference: action.reference,
+        metadata: {
+          adminReason: action.reason,
+          adminAction: action.action,
+        },
+      });
+    }
+
     if (action.action === 'FREEZE') {
       return this.accountService.freezeAccount(ADMIN_ACTOR, accountId, 'FRAUD_ALERT', action.reason);
     }

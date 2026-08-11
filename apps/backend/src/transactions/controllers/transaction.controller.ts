@@ -11,6 +11,7 @@ import {
   HttpStatus,
   Logger,
   Inject,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -24,9 +25,13 @@ import { TransactionService } from '../services/transaction.service';
 import type { CreateTransactionDto } from '../dto/create-transaction.dto';
 import type { SearchTransactionsDto, StatementExportDto } from '../dto/search-transactions.dto';
 import { TransactionResponseDto, TransactionSearchResponseDto, StatementResponseDto } from '../dto/transaction-response.dto';
+import { CurrentUser } from '../../auth/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import type { AuthenticatedUser } from '../../accounts/policies/account.policy';
 
 @ApiTags('Transactions')
 @ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller('transactions')
 export class TransactionController {
   private readonly logger = new Logger(TransactionController.name);
@@ -53,8 +58,15 @@ export class TransactionController {
   @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'Validation error' })
   @ApiResponse({ status: HttpStatus.CONFLICT, description: 'Duplicate reference or idempotency key' })
   @ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Policy violation' })
-  async createTransaction(@Body() dto: CreateTransactionDto): Promise<TransactionResponseDto> {
-    return this.transactionService.createTransaction(dto);
+  async createTransaction(
+    @CurrentUser() userOrDto: AuthenticatedUser | CreateTransactionDto,
+    @Body() dto?: CreateTransactionDto,
+  ): Promise<TransactionResponseDto> {
+    if (!dto) {
+      return this.transactionService.createTransaction(userOrDto as CreateTransactionDto);
+    }
+    const user = userOrDto as AuthenticatedUser;
+    return this.transactionService.createTransactionForUser(user, dto);
   }
 
   /**
@@ -71,8 +83,15 @@ export class TransactionController {
     description: 'Transaction search results',
     type: TransactionSearchResponseDto,
   })
-  async searchTransactions(@Query() dto: SearchTransactionsDto): Promise<TransactionSearchResponseDto> {
-    return this.transactionService.searchTransactions(dto);
+  async searchTransactions(
+    @CurrentUser() userOrDto: AuthenticatedUser | SearchTransactionsDto,
+    @Query() dto?: SearchTransactionsDto,
+  ): Promise<TransactionSearchResponseDto> {
+    if (!dto) {
+      return this.transactionService.searchTransactions(userOrDto as SearchTransactionsDto);
+    }
+    const user = userOrDto as AuthenticatedUser;
+    return this.transactionService.searchTransactionsForUser(user, dto);
   }
 
   /**
@@ -90,8 +109,15 @@ export class TransactionController {
     type: TransactionResponseDto,
   })
   @ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'Transaction not found' })
-  async getTransaction(@Param('id') id: string): Promise<TransactionResponseDto> {
-    return this.transactionService.getTransaction(id);
+  async getTransaction(
+    @CurrentUser() userOrId: AuthenticatedUser | string,
+    @Param('id') id?: string,
+  ): Promise<TransactionResponseDto> {
+    if (!id) {
+      return this.transactionService.getTransaction(userOrId as string);
+    }
+    const user = userOrId as AuthenticatedUser;
+    return this.transactionService.getTransactionForUser(user, id);
   }
 
   /**
@@ -161,11 +187,15 @@ export class TransactionController {
     type: TransactionSearchResponseDto,
   })
   async getAccountTransactions(
-    @Param('accountId') accountId: string,
+    @CurrentUser() userOrAccountId: AuthenticatedUser | string,
+    @Param('accountId') accountIdOrLimit?: string | number,
     @Query('limit') limit?: number,
     @Query('cursor') cursor?: string,
   ): Promise<TransactionSearchResponseDto> {
-    return this.transactionService.getAccountTransactions(accountId, limit, cursor);
+    if (typeof userOrAccountId === 'string') {
+      return this.transactionService.getAccountTransactions(userOrAccountId, Number(accountIdOrLimit ?? limit ?? 50), cursor);
+    }
+    return this.transactionService.getAccountTransactionsForUser(userOrAccountId, accountIdOrLimit as string, limit, cursor);
   }
 
   /**

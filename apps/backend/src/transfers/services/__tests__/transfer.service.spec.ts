@@ -11,12 +11,30 @@ import { TransferType } from '../../enums/transfer-type.enum';
 
 describe('TransferService', () => {
   it('creates an immediate internal transfer using the transaction engine', async () => {
-    const accountService = { findById: jest.fn().mockResolvedValue({ status: 'ACTIVE', availableBalance: '100.00' }) };
+    const transfers = new Map<string, any>();
+    const accountService = {
+      findById: jest.fn().mockResolvedValue({ status: 'ACTIVE', availableBalance: '100.00' }),
+      isAccountHolder: jest.fn().mockResolvedValue(true),
+    };
     const transactionService = { createTransaction: jest.fn().mockResolvedValue({ id: 'txn-1', reference: 'TXN-1' }) };
+    const transferRepository = {
+      findByIdempotencyKey: jest.fn().mockResolvedValue(null),
+      existsByReference: jest.fn().mockResolvedValue(false),
+      findBeneficiaryById: jest.fn().mockResolvedValue(null),
+      saveTransfer: jest.fn(async (record) => {
+        transfers.set(record.id, { ...record });
+        return record;
+      }),
+      updateTransfer: jest.fn(async (record) => {
+        transfers.set(record.id, { ...record });
+        return record;
+      }),
+      findById: jest.fn(async (id) => transfers.get(id) ?? null),
+    };
     const module = await Test.createTestingModule({
       providers: [
         TransferService,
-        TransferRepository,
+        { provide: TransferRepository, useValue: transferRepository },
         TransferPolicy,
         TransferValidator,
         TransferMapper,

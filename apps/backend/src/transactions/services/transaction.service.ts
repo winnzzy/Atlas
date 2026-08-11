@@ -36,6 +36,7 @@ import {
 } from '../events/transaction.events';
 import { LedgerService } from '../../ledger/services/ledger.service';
 import { AccountService } from '../../accounts/services/account.service';
+import type { AuthenticatedUser } from '../../accounts/policies/account.policy';
 
 interface AuditLogEntry {
   transactionId: string;
@@ -163,6 +164,14 @@ export class TransactionService {
     return this.processTransactionLifecycle(transaction, dto.createdBy);
   }
 
+  async createTransactionForUser(
+    user: AuthenticatedUser,
+    dto: CreateTransactionDto,
+  ): Promise<TransactionResponseDto> {
+    await this.ensureAccountAccess(user, dto.accountId);
+    return this.createTransaction({ ...dto, createdBy: user.id });
+  }
+
   /**
    * Process the transaction through its lifecycle stages automatically.
    * For deposits and simple transactions, this completes the full cycle.
@@ -249,6 +258,7 @@ export class TransactionService {
       });
 
       transaction.journalId = journal.id.value;
+      await this.repository.applyBalanceMutation(transaction);
       transaction = await this.transitionStatus(transaction, TransactionStatus.POSTED, performedBy);
 
       this.emitEvent(
@@ -525,6 +535,15 @@ export class TransactionService {
     return this.mapper.toResponseDto(transaction);
   }
 
+  async getTransactionForUser(user: AuthenticatedUser, id: string): Promise<TransactionResponseDto> {
+    const transaction = await this.repository.findById(id);
+    if (!transaction) {
+      throw new TransactionNotFoundException(id);
+    }
+    await this.ensureAccountAccess(user, transaction.accountId);
+    return this.mapper.toResponseDto(transaction);
+  }
+
   /**
    * Search transactions with cursor-based pagination.
    */
@@ -555,6 +574,33 @@ export class TransactionService {
       items: this.mapper.toResponseDtoArray(result.items),
       nextCursor: result.nextCursor,
       totalCount: result.totalCount,
+      limit: dto.limit ?? 50,
+    };
+  }
+
+  async searchTransactionsForUser(
+    user: AuthenticatedUser,
+    dto: SearchTransactionsDto,
+  ): Promise<TransactionSearchResponseDto> {
+    if (dto.accountId) {
+      await this.ensureAccountAccess(user, dto.accountId);
+      return this.searchTransactions(dto);
+    }
+
+    const accounts = await this.accountService.listAccounts(user, { limit: 100 });
+    const results = await Promise.all(
+      accounts.data.map((account) => this.repository.findByAccount(account.id, dto.limit ?? 50, dto.cursor)),
+    );
+    const items = results
+      .flatMap((result) => result.items)
+      .filter((item, index, rows) => rows.findIndex((row) => row.id === item.id) === index)
+      .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
+      .slice(0, dto.limit ?? 50);
+
+    return {
+      items: this.mapper.toResponseDtoArray(items),
+      nextCursor: items.length === (dto.limit ?? 50) ? items.at(-1)?.id : undefined,
+      totalCount: items.length,
       limit: dto.limit ?? 50,
     };
   }
@@ -685,6 +731,16 @@ export class TransactionService {
     };
   }
 
+  async getAccountTransactionsForUser(
+    user: AuthenticatedUser,
+    accountId: string,
+    limit: number = 50,
+    cursor?: string,
+  ): Promise<TransactionSearchResponseDto> {
+    await this.ensureAccountAccess(user, accountId);
+    return this.getAccountTransactions(accountId, limit, cursor);
+  }
+
   /**
    * Generate a statement for an account within a date range.
    * Export placeholder only - no PDF generation.
@@ -777,13 +833,18 @@ export class TransactionService {
       if (error instanceof AccountNotActiveException) {
         throw error;
       }
-      // If account service is unavailable, proceed with defaults for non-critical checks
-      this.logger.warn(`Account validation fallback for ${accountId}: ${error instanceof Error ? error.message : 'Unknown'}`);
-      return {
-        id: accountId,
-        status: 'ACTIVE',
-        currency: 'USD',
-      };
+      throw error;
+    }
+  }
+
+  private async ensureAccountAccess(user: AuthenticatedUser, accountId: string): Promise<void> {
+    if (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') {
+      return;
+    }
+
+    const isHolder = await this.accountService.isAccountHolder(accountId, user.id);
+    if (!isHolder) {
+      throw new TransactionPolicyViolationException('You do not have permission to access this account');
     }
   }
 

@@ -59,6 +59,11 @@ export class TransferService {
   ) {}
 
   async createTransfer(user: AuthenticatedUser, dto: CreateTransferDto): Promise<TransferResponseDto> {
+    const isHolder = await this.accountService.isAccountHolder(dto.sourceAccountId, user.id);
+    if (!isHolder && user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
+      throw new TransferPolicyViolationException('You do not have permission to transfer from this account');
+    }
+
     if (dto.idempotencyKey) {
       const existing = await this.repository.findByIdempotencyKey(dto.idempotencyKey);
       if (existing) {
@@ -77,6 +82,9 @@ export class TransferService {
 
     const beneficiary = dto.beneficiaryId ? await this.repository.findBeneficiaryById(dto.beneficiaryId) : null;
     const destinationAccount = dto.destinationAccountId ? await this.accountService.findById(dto.destinationAccountId) : null;
+    if (dto.type === TransferType.INTERNAL && !destinationAccount) {
+      throw new TransferValidationException('Internal transfers require a valid destination Atlas account');
+    }
 
     const policyResult = this.policy.authorize({
       transferType: dto.type,
@@ -180,7 +188,17 @@ export class TransferService {
     this.audit('SUBMITTED', transfer, user.id, {});
     this.emit(new TransferSubmittedEvent(transfer.id, transfer.sourceAccountId, { reference: transfer.reference }), TransferEventType.TRANSFER_SUBMITTED);
 
-    const transaction = await this.transactionService.createTransaction(this.toTransactionCreateDto(transfer));
+    if (transfer.type !== TransferType.INTERNAL) {
+      transfer.status = TransferStatus.PROCESSING;
+      transfer.sentAt = new Date();
+      transfer.failureReason = 'External settlement rail is not configured';
+      await this.repository.updateTransfer(transfer);
+      this.audit('EXTERNAL_PROCESSING', transfer, user.id, { reason: transfer.failureReason });
+      this.emit(new TransferSentEvent(transfer.id, transfer.sourceAccountId, { settlementReference: transfer.reference }), TransferEventType.TRANSFER_SENT);
+      return this.mapper.toTransferResponse(transfer);
+    }
+
+    const transaction = await this.transactionService.createTransaction({ ...this.toTransactionCreateDto(transfer), createdBy: user.id });
     transfer.settlementReference = transaction.reference;
     transfer.status = TransferStatus.PROCESSING;
     transfer.sentAt = new Date();
@@ -205,6 +223,12 @@ export class TransferService {
     return this.mapper.toTransferResponse(await this.requireTransfer(transferId));
   }
 
+  async getTransferForUser(user: AuthenticatedUser, transferId: string): Promise<TransferResponseDto> {
+    const transfer = await this.requireTransfer(transferId);
+    await this.ensureTransferAccess(user, transfer);
+    return this.mapper.toTransferResponse(transfer);
+  }
+
   async searchTransfers(dto: SearchTransfersDto): Promise<TransferSearchResponseDto> {
     const result = await this.repository.search({
       reference: dto.reference,
@@ -225,6 +249,51 @@ export class TransferService {
       items: this.mapper.toTransferResponseArray(result.items),
       nextCursor: result.nextCursor,
       totalCount: result.totalCount,
+      limit: dto.limit ?? 50,
+    };
+  }
+
+  async searchTransfersForUser(
+    user: AuthenticatedUser,
+    dto: SearchTransfersDto,
+  ): Promise<TransferSearchResponseDto> {
+    if (dto.accountId) {
+      const isHolder = await this.accountService.isAccountHolder(dto.accountId, user.id);
+      if (!isHolder && user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
+        throw new TransferPolicyViolationException('You do not have permission to view transfers for this account');
+      }
+      return this.searchTransfers(dto);
+    }
+
+    const accounts = await this.accountService.listAccounts(user, { limit: 100 });
+    const results = await Promise.all(
+      accounts.data.map((account) =>
+        this.repository.search({
+          reference: dto.reference,
+          status: dto.status,
+          type: dto.type,
+          beneficiaryId: dto.beneficiaryId,
+          accountId: account.id,
+          currency: dto.currency,
+          minAmount: dto.minAmount,
+          maxAmount: dto.maxAmount,
+          fromDate: dto.fromDate ? new Date(dto.fromDate) : undefined,
+          toDate: dto.toDate ? new Date(dto.toDate) : undefined,
+          cursor: dto.cursor,
+          limit: dto.limit ?? 50,
+        }),
+      ),
+    );
+    const items = results
+      .flatMap((result) => result.items)
+      .filter((item, index, rows) => rows.findIndex((row) => row.id === item.id) === index)
+      .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
+      .slice(0, dto.limit ?? 50);
+
+    return {
+      items: this.mapper.toTransferResponseArray(items),
+      nextCursor: items.length === (dto.limit ?? 50) ? items.at(-1)?.id : undefined,
+      totalCount: items.length,
       limit: dto.limit ?? 50,
     };
   }
@@ -388,6 +457,19 @@ export class TransferService {
     const transfer = await this.repository.findById(transferId);
     if (!transfer) throw new TransferNotFoundException(transferId);
     return transfer;
+  }
+
+  private async ensureTransferAccess(user: AuthenticatedUser, transfer: TransferRecord): Promise<void> {
+    if (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') {
+      return;
+    }
+    const sourceHolder = await this.accountService.isAccountHolder(transfer.sourceAccountId, user.id);
+    const destinationHolder = transfer.destinationAccountId
+      ? await this.accountService.isAccountHolder(transfer.destinationAccountId, user.id)
+      : false;
+    if (!sourceHolder && !destinationHolder) {
+      throw new TransferPolicyViolationException('You do not have permission to view this transfer');
+    }
   }
 
   private async requireBeneficiary(beneficiaryId: string): Promise<BeneficiaryRecord> {

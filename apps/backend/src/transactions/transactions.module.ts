@@ -7,10 +7,12 @@ import { TransactionPolicy } from './policies/transaction.policy';
 import { TransactionMapper } from './mappers/transaction.mapper';
 import { LedgerModule } from '../ledger/ledger.module';
 import { AccountsModule } from '../accounts/accounts.module';
+import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
   imports: [
     EventEmitterModule.forRoot(),
+    PrismaModule,
     LedgerModule,
     AccountsModule,
   ],
