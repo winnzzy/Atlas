@@ -36,6 +36,7 @@ export class AdminRepository {
     maintenanceMode: false,
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService & Record<string, any>) {}
 
   async getDashboardOverview(): Promise<AdminDashboardOverviewDto> {

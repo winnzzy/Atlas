@@ -87,11 +87,6 @@ export class CreateCardDto {
   @MaxLength(12)
   pin?: string;
 
-  @ApiPropertyOptional({ description: 'Whether this is a demo card', default: false })
-  @IsOptional()
-  @IsBoolean()
-  isDemo?: boolean;
-
   @ApiPropertyOptional({ enum: CardSpendingCategory, default: CardSpendingCategory.GENERAL })
   @IsOptional()
   @IsEnum(CardSpendingCategory)
@@ -453,9 +448,6 @@ export class CardResponseDto {
   @ApiPropertyOptional({ description: 'Closed timestamp' })
   closedAt?: Date;
 
-  @ApiProperty({ description: 'Demo mode flag' })
-  isDemo!: boolean;
-
   @ApiProperty({ description: 'Creation timestamp' })
   createdAt!: Date;
 
@@ -478,20 +470,6 @@ export class CardSearchResponseDto {
 
   @ApiProperty({ description: 'Page limit' })
   limit!: number;
-}
-
-export class CardRevealResponseDto {
-  @ApiProperty({ description: 'Card ID', format: 'uuid' })
-  cardId!: string;
-
-  @ApiProperty({ description: 'Masked card number' })
-  maskedNumber!: string;
-
-  @ApiProperty({ description: 'Demo-only PAN reveal' })
-  demoPan!: string;
-
-  @ApiProperty({ description: 'Demo-only CVV reveal' })
-  demoCvv!: string;
 }
 
 export class CardTransactionResponseDto {

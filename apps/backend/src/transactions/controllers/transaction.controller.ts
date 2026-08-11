@@ -23,7 +23,8 @@ import {
 } from '@nestjs/swagger';
 import { TransactionService } from '../services/transaction.service';
 import type { CreateTransactionDto } from '../dto/create-transaction.dto';
-import type { SearchTransactionsDto, StatementExportDto } from '../dto/search-transactions.dto';
+import { StatementExportDto } from '../dto/search-transactions.dto';
+import type { SearchTransactionsDto } from '../dto/search-transactions.dto';
 import { TransactionResponseDto, TransactionSearchResponseDto, StatementResponseDto } from '../dto/transaction-response.dto';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { NotificationChannel, NotificationType} from '@prisma/client';
 import { UserStatus } from '@prisma/client';
 import type { AuthenticatedUser } from '../../accounts/policies/account.policy';
@@ -192,7 +192,7 @@ export class AdminOrchestrationService {
       return this.cardService.cancelCard(ownerContext, cardId, action.reason);
     }
 
-    return this.cardService.revealCard(ownerContext, cardId);
+    throw new BadRequestException(`Unsupported card action ${action.action}`);
   }
 
   listTransfers(query: SearchTransfersDto) {

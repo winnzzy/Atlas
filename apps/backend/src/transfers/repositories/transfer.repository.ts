@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Prisma, TransferStatus as PrismaTransferStatus } from '@prisma/client';
+import type { Prisma} from '@prisma/client';
+import { TransferStatus as PrismaTransferStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { TransferStatus } from '../enums/transfer-status.enum';
@@ -102,6 +103,9 @@ type TransferMetadata = Record<string, unknown> & {
   scheduledAt?: string;
   reversalTransactionId?: string;
 };
+type AchTransferRow = Prisma.AchTransferGetPayload<Record<string, never>>;
+type WireTransferRow = Prisma.WireTransferGetPayload<Record<string, never>>;
+type BeneficiaryRow = Prisma.BeneficiaryGetPayload<Record<string, never>>;
 
 @Injectable()
 export class TransferRepository {
@@ -224,8 +228,9 @@ export class TransferRepository {
     if (params.currency) items = items.filter((item) => item.currency === params.currency);
     if (params.minAmount) items = items.filter((item) => Number(item.amount) >= Number(params.minAmount));
     if (params.maxAmount) items = items.filter((item) => Number(item.amount) <= Number(params.maxAmount));
-    if (params.fromDate) items = items.filter((item) => item.createdAt >= params.fromDate!);
-    if (params.toDate) items = items.filter((item) => item.createdAt <= params.toDate!);
+    const { fromDate, toDate } = params;
+    if (fromDate) items = items.filter((item) => item.createdAt >= fromDate);
+    if (toDate) items = items.filter((item) => item.createdAt <= toDate);
 
     items.sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
     const totalCount = items.length;
@@ -304,7 +309,7 @@ export class TransferRepository {
     return (await this.findByIdempotencyKey(key)) !== null;
   }
 
-  private fromAch(row: any): TransferRecord {
+  private fromAch(row: AchTransferRow): TransferRecord {
     const metadata = this.metadata(row.metadata);
     return {
       id: row.id,
@@ -341,7 +346,7 @@ export class TransferRepository {
     };
   }
 
-  private fromWire(row: any): TransferRecord {
+  private fromWire(row: WireTransferRow): TransferRecord {
     const metadata = this.metadata(row.metadata);
     return {
       id: row.id,
@@ -375,12 +380,12 @@ export class TransferRepository {
     };
   }
 
-  private fromBeneficiary(row: any): BeneficiaryRecord {
+  private fromBeneficiary(row: BeneficiaryRow): BeneficiaryRecord {
     return {
       id: row.id,
       userId: row.userId,
       name: row.beneficiaryName ?? row.nickname,
-      type: row.accountType,
+      type: row.accountType as BeneficiaryRecord['type'],
       routingNumber: row.routingNumber ?? undefined,
       swiftCode: row.swiftCode ?? undefined,
       bankName: row.bankName,

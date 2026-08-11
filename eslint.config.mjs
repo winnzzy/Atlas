@@ -60,4 +60,15 @@ export default [
       'no-var': 'error',
     },
   },
+  {
+    // NestJS reads constructor and handler parameter types at runtime through
+    // `emitDecoratorMetadata`. A type-only import is erased, so TypeScript emits
+    // `Object` for that parameter: DI can no longer resolve the provider, and
+    // ValidationPipe silently skips the DTO. Autofixing this rule here takes the
+    // API down, so it stays off for backend sources.
+    files: ['apps/backend/src/**/*.ts'],
+    rules: {
+      '@typescript-eslint/consistent-type-imports': 'off',
+    },
+  },
 ];

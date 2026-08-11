@@ -9,9 +9,9 @@ import {
   ProfileResponseDto,
   SecurityResponseDto,
 } from './dto/profile-response.dto';
-import type { UpdatePreferencesDto } from './dto/update-preferences.dto';
-import type { UpdateProfileDto } from './dto/update-profile.dto';
-import type { UpdateSecurityDto } from './dto/update-security.dto';
+import { UpdatePreferencesDto } from './dto/update-preferences.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { UpdateSecurityDto } from './dto/update-security.dto';
 
 @ApiTags('Profile')
 @UseGuards(JwtAuthGuard)

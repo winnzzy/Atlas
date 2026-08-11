@@ -53,13 +53,6 @@ type ProfileMetadataShape = {
 
 const DEFAULT_NOTIFICATION_TYPE = 'SYSTEM' as const;
 const DEFAULT_NOTIFICATION_CHANNEL = 'IN_APP' as const;
-const DEFAULT_NOTIFICATION_PREFERENCE_WHERE = {
-  userId_type_channel: {
-    userId: '',
-    type: DEFAULT_NOTIFICATION_TYPE,
-    channel: DEFAULT_NOTIFICATION_CHANNEL,
-  },
-} as const;
 
 type MutableMockState = {
   profile: CustomerProfile;

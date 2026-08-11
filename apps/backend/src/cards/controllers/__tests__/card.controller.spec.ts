@@ -16,7 +16,6 @@ describe('CardController', () => {
       unlockCard: jest.fn(),
       cancelCard: jest.fn(),
       replaceCard: jest.fn(),
-      revealCard: jest.fn(),
       changePin: jest.fn(),
       regenerateCvv: jest.fn(),
       authorizeTransaction: jest.fn(),
@@ -34,9 +33,11 @@ describe('CardController', () => {
     }).compile();
 
     const controller = module.get(CardController);
-    const result = await controller.issueCard({ accountId: 'acc-1', type: 'VIRTUAL_DEBIT' } as never);
+    const user = { id: 'user-1' } as never;
+    const dto = { accountId: 'acc-1', type: 'VIRTUAL_DEBIT' } as never;
+    const result = await controller.issueCard(user, dto);
 
     expect(result).toEqual({ id: 'card-1' });
-    expect(service.issueCard).toHaveBeenCalledTimes(1);
+    expect(service.issueCard).toHaveBeenCalledWith(user, dto);
   });
 });

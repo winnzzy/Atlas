@@ -36,12 +36,12 @@ describe('CardService', () => {
       accountId: 'acc-1',
       type: CardType.VIRTUAL_DEBIT,
       nickname: 'Travel',
-      isDemo: true,
     } as never);
 
     expect(card.id).toBeDefined();
     expect(card.accountId).toBe('acc-1');
     expect(card.maskedNumber).toContain('•');
+    expect(card).not.toHaveProperty('isDemo');
   });
 
   it('authorizes a card transaction through ledger hold and transaction service', async () => {
@@ -79,7 +79,6 @@ describe('CardService', () => {
     const card = await service.issueCard({ id: 'user-2' } as never, {
       accountId: 'acc-2',
       type: CardType.VIRTUAL_DEBIT,
-      isDemo: true,
       spendingControls: {
         dailyLimit: '500.00',
         monthlyLimit: '10000.00',

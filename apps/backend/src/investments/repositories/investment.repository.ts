@@ -20,6 +20,7 @@ import type {
 export class InvestmentRepository {
   private readonly logger = new Logger(InvestmentRepository.name);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService & Record<string, any>) {}
 
   // ─── Investment Product ───────────────────────────────────────────

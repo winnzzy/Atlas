@@ -23,12 +23,7 @@ import {
   NotificationSearchResponseDto,
   NotificationTemplateResponseDto,
 } from '../dto';
-import type {
-  CreateNotificationTemplateDto,
-  PreviewNotificationTemplateDto,
-  SearchNotificationsDto,
-  UpdateNotificationPreferenceDto,
-} from '../dto';
+import { CreateNotificationTemplateDto, PreviewNotificationTemplateDto, SearchNotificationsDto, UpdateNotificationPreferenceDto } from '../dto';
 import { NotificationMapper } from '../mappers/notification.mapper'; // eslint-disable-line @typescript-eslint/consistent-type-imports
 import { NotificationPreferencesService } from '../services/notification-preferences.service'; // eslint-disable-line @typescript-eslint/consistent-type-imports
 import { NotificationService } from '../services/notification.service'; // eslint-disable-line @typescript-eslint/consistent-type-imports

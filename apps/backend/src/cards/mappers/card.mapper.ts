@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { CardRecord, CardTransactionRecord } from '../repositories/card.repository';
-import type { CardRevealResponseDto, CardResponseDto, CardSearchResponseDto, CardTransactionResponseDto, CardTransactionSearchResponseDto } from '../dto/cards.dto';
+import type { CardResponseDto, CardSearchResponseDto, CardTransactionResponseDto, CardTransactionSearchResponseDto } from '../dto/cards.dto';
 
 @Injectable()
 export class CardMapper {
@@ -28,7 +28,6 @@ export class CardMapper {
       activatedAt: card.activatedAt,
       frozenAt: card.frozenAt,
       closedAt: card.closedAt,
-      isDemo: card.isDemo,
       createdAt: card.createdAt,
       updatedAt: card.updatedAt,
       replacementCardId: card.replacementCardId,
@@ -79,12 +78,4 @@ export class CardMapper {
     };
   }
 
-  toRevealResponse(card: CardRecord): CardRevealResponseDto {
-    return {
-      cardId: card.id,
-      maskedNumber: card.maskedNumber,
-      demoPan: card.cardNumber,
-      demoCvv: card.cvvHash.replace(/^hash_/, '').slice(0, 3),
-    };
-  }
 }

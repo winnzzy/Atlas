@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Headers, Patch, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import type { AdminRole, AdminAuditQueryDto, AdminReportQueryDto, AdminSearchQueryDto, PaginationDto, UpdateAdminSettingsDto } from '../dto';
+import { AdminAuditQueryDto, AdminReportQueryDto, AdminSearchQueryDto, PaginationDto, UpdateAdminSettingsDto } from '../dto';
+import type { AdminRole } from '../dto';
 import { AdminAuthGuard } from '../guards/admin-auth.guard';
 import { AdminPolicy } from '../policies/admin.policy';
 import { AdminAuditService } from '../services/admin-audit.service';

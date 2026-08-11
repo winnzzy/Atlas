@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { Prisma, TransactionStatus as PrismaTransactionStatus, TransactionType as PrismaTransactionType } from '@prisma/client';
+import type { Prisma} from '@prisma/client';
+import { TransactionStatus as PrismaTransactionStatus, TransactionType as PrismaTransactionType } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CREDIT_TRANSACTION_TYPES, DEBIT_TRANSACTION_TYPES, TransactionType, TRANSFER_TRANSACTION_TYPES } from '../enums/transaction-type.enum';
@@ -82,6 +83,7 @@ type TransactionMetadata = Record<string, unknown> & {
   expiresAt?: string;
   balanceApplied?: boolean;
 };
+type TransactionRow = Prisma.TransactionGetPayload<Record<string, never>>;
 
 @Injectable()
 export class TransactionRepository {
@@ -295,7 +297,7 @@ export class TransactionRepository {
     return rows.map((row) => this.toRecord(row));
   }
 
-  private async applyAccountDelta(tx: any, transactionId: string, accountId: string, delta: Decimal): Promise<void> {
+  private async applyAccountDelta(tx: Prisma.TransactionClient, transactionId: string, accountId: string, delta: Decimal): Promise<void> {
     const account = await tx.bankAccount.findUnique({ where: { id: accountId } });
     if (!account) {
       throw new Error(`Account ${accountId} not found`);
@@ -325,7 +327,7 @@ export class TransactionRepository {
   }
 
   private async createTransactionLine(
-    tx: any,
+    tx: Prisma.TransactionClient,
     transactionId: string,
     entryType: 'DEBIT' | 'CREDIT',
     accountCode: string,
@@ -344,7 +346,7 @@ export class TransactionRepository {
     });
   }
 
-  private toRecord(row: any): TransactionRecord {
+  private toRecord(row: TransactionRow): TransactionRecord {
     const metadata = this.metadata(row.metadata);
     return {
       id: row.id,

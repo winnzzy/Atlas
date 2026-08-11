@@ -11,7 +11,7 @@ import { TransferType } from '../../enums/transfer-type.enum';
 
 describe('TransferService', () => {
   it('creates an immediate internal transfer using the transaction engine', async () => {
-    const transfers = new Map<string, any>();
+    const transfers = new Map<string, Parameters<TransferRepository['saveTransfer']>[0]>();
     const accountService = {
       findById: jest.fn().mockResolvedValue({ status: 'ACTIVE', availableBalance: '100.00' }),
       isAccountHolder: jest.fn().mockResolvedValue(true),

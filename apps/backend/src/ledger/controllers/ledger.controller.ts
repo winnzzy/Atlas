@@ -17,11 +17,11 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { LedgerService } from '../services/ledger.service';
-import type { PostJournalDto } from '../dto/post-journal.dto';
-import type { CreateHoldDto, ReleaseHoldDto } from '../dto/hold.dto';
-import type { ReverseJournalDto } from '../dto/reverse-journal.dto';
-import type { BalanceQueryDto } from '../dto/balance-query.dto';
-import type { CreateReconciliationDto } from '../dto/reconciliation.dto';
+import { PostJournalDto } from '../dto/post-journal.dto';
+import { CreateHoldDto, ReleaseHoldDto } from '../dto/hold.dto';
+import { ReverseJournalDto } from '../dto/reverse-journal.dto';
+import { BalanceQueryDto } from '../dto/balance-query.dto';
+import { CreateReconciliationDto } from '../dto/reconciliation.dto';
 
 @ApiTags('Ledger')
 @ApiBearerAuth()

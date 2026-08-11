@@ -22,11 +22,11 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { AccountService } from '../services/account.service';
-import type { CreateAccountDto } from '../dto/create-account.dto';
-import type { UpdateNicknameDto } from '../dto/update-nickname.dto';
-import type { FreezeAccountDto } from '../dto/freeze-account.dto';
-import type { CloseAccountDto } from '../dto/close-account.dto';
-import type { LockAccountDto, UnlockAccountDto } from '../dto/lock-account.dto';
+import { CreateAccountDto } from '../dto/create-account.dto';
+import { UpdateNicknameDto } from '../dto/update-nickname.dto';
+import { FreezeAccountDto } from '../dto/freeze-account.dto';
+import { CloseAccountDto } from '../dto/close-account.dto';
+import { LockAccountDto, UnlockAccountDto } from '../dto/lock-account.dto';
 import { AccountResponseDto } from '../dto/account-response.dto';
 import type { AccountStatusType, AccountTypeType } from '../dto/account-response.dto';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';

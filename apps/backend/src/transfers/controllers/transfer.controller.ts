@@ -4,8 +4,9 @@ import { type AuthenticatedUser } from '../../accounts/policies/account.policy';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { TransferService } from '../services/transfer.service';
-import type { CreateBeneficiaryDto, CreateTransferDto } from '../dto/create-transfer.dto';
-import type { SearchTransfersDto } from '../dto/search-transfers.dto';
+import { CreateBeneficiaryDto } from '../dto/create-transfer.dto';
+import type { CreateTransferDto } from '../dto/create-transfer.dto';
+import { SearchTransfersDto } from '../dto/search-transfers.dto';
 import { BeneficiaryResponseDto, BeneficiarySearchResponseDto, TransferResponseDto, TransferSearchResponseDto } from '../dto/transfer-response.dto';
 
 @ApiTags('Transfers')

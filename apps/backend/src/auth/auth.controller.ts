@@ -24,13 +24,7 @@ import {
 import type { Request, Response } from 'express';
 import { CurrentUser, type AuthenticatedUser } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
-import {
-  ForgotPasswordDto,
-  LoginDto,
-  RefreshTokenDto,
-  RegisterDto,
-  ResetPasswordDto,
-} from './dto';
+import { ForgotPasswordDto, LoginDto, RefreshTokenDto, RegisterDto, ResetPasswordDto } from './dto';
 import {
   AuthSessionEnvelopeDto,
   MessageEnvelopeDto,
@@ -38,7 +32,7 @@ import {
   SessionListEnvelopeDto,
   TokenRefreshEnvelopeDto,
 } from './dto/auth-response.dto';
-import type { SessionListQueryDto } from './dto/session-list-query.dto';
+import { SessionListQueryDto } from './dto/session-list-query.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AuthService } from './auth.service';
 

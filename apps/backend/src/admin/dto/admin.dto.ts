@@ -183,9 +183,9 @@ export class AccountAdminActionDto {
 }
 
 export class CardAdminActionDto {
-  @ApiProperty({ enum: ['ISSUE', 'FREEZE', 'UNFREEZE', 'REPLACE', 'CANCEL', 'REVEAL_PAN'] })
+  @ApiProperty({ enum: ['ISSUE', 'FREEZE', 'UNFREEZE', 'REPLACE', 'CANCEL'] })
   @IsString()
-  action!: 'ISSUE' | 'FREEZE' | 'UNFREEZE' | 'REPLACE' | 'CANCEL' | 'REVEAL_PAN';
+  action!: 'ISSUE' | 'FREEZE' | 'UNFREEZE' | 'REPLACE' | 'CANCEL';
 
   @ApiPropertyOptional()
   @IsOptional()

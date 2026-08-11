@@ -14,7 +14,6 @@ import { CARD_EVENT_NAMES, type CardEventBase } from '../events/card.events';
 import { CardDeclineReason, CardNetwork, CardSpendingCategory, CardStatus, CardTransactionStatus, CardType, TERMINAL_CARD_STATUSES } from '../enums/card.enums';
 import type {
   AuthorizeCardTransactionDto,
-  CardRevealResponseDto,
   CardResponseDto,
   CardSearchResponseDto,
   CardTransactionResponseDto,
@@ -101,7 +100,7 @@ export class CardService {
       onlineEnabled: dto.onlineEnabled ?? true,
       internationalEnabled: dto.internationalEnabled ?? false,
       atmEnabled: dto.atmEnabled ?? true,
-      isDemo: dto.isDemo ?? false,
+      isDemo: false,
       metadata: {
         accountStatus: String(account.status ?? 'ACTIVE'),
       },
@@ -276,7 +275,6 @@ export class CardService {
       network: card.network,
       cardholderName: card.cardholderName,
       nickname: card.nickname,
-      isDemo: card.isDemo,
       spendingCategory: card.spendingCategory,
       spendingControls: card.spendingControls,
       contactlessEnabled: card.contactlessEnabled,
@@ -294,15 +292,6 @@ export class CardService {
     this.audit('REISSUE', card, user.id, { replacementCardId: replacementCard.id });
     this.emit(CARD_EVENT_NAMES.REISSUED, { cardId: card.id, accountId: card.accountId, customerId: card.customerId, performedBy: user.id, status: card.status, metadata: { replacementCardId: replacementCard.id } });
     return this.mapper.toCardResponse(replacementCard);
-  }
-
-  async revealCard(user: AuthenticatedUser, cardId: string): Promise<CardRevealResponseDto> {
-    const card = await this.findCardOrThrow(cardId);
-    await this.ensureOwnership(user, card);
-    if (!card.isDemo) {
-      throw new CardPolicyViolationException('Full PAN reveal is only available for demo cards');
-    }
-    return this.mapper.toRevealResponse(card);
   }
 
   async changePin(user: AuthenticatedUser, cardId: string, dto: ChangePinDto): Promise<CardResponseDto> {
