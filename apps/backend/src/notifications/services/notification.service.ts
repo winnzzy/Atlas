@@ -192,6 +192,18 @@ export class NotificationService {
     return this.cancel(id);
   }
 
+  /**
+   * Clear (soft-delete) a notification so it leaves the customer's list.
+   * Ownership is enforced by getByIdForUser, which reports not-found for a
+   * notification that belongs to another user — so a customer can never clear
+   * someone else's notification by guessing an ID.
+   */
+  async clearForUser(userId: string, id: string): Promise<{ id: string; cleared: boolean }> {
+    await this.getByIdForUser(userId, id);
+    await this.repository.softDeleteNotification(id);
+    return { id, cleared: true };
+  }
+
   private errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : 'Unknown error';
   }

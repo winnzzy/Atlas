@@ -344,6 +344,12 @@ export async function markNotificationRead(id: string) {
   return requestJson<NotificationSummary>(`/api/v1/notifications/${id}/read`, { method: 'PATCH' });
 }
 
+export async function clearNotification(id: string) {
+  return requestJson<{ id: string; cleared: boolean }>(`/api/v1/notifications/${id}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function getPortfolio() {
   return requestJson<PortfolioSummary>('/api/v1/investments/portfolio');
 }
@@ -413,6 +419,21 @@ export async function updateProfile(input: Record<string, unknown>) {
 
 export async function updatePreferences(input: Record<string, unknown>) {
   return postJson<Record<string, unknown>>('/api/v1/profile/preferences', input, 'PATCH');
+}
+
+// ── Public site content ────────────────────────────────────────────────────
+
+export type PublicContact = {
+  supportEmail: string | null;
+  supportPhone: string | null;
+  businessAddress: string | null;
+  legalEntity: string | null;
+  licenseInfo: string | null;
+  depositInsuranceInfo: string | null;
+};
+
+export async function getPublicContact() {
+  return requestJson<PublicContact>('/api/v1/public/contact');
 }
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
@@ -493,6 +514,14 @@ export async function updateAdminSettings(input: Record<string, unknown>) {
   return postJson<Record<string, unknown>>('/api/v1/admin/settings', input, 'PATCH');
 }
 
+export async function getAdminPublicContact() {
+  return requestJson<PublicContact>('/api/v1/admin/settings/public-contact');
+}
+
+export async function updateAdminPublicContact(input: Record<string, string>) {
+  return postJson<PublicContact>('/api/v1/admin/settings/public-contact', input, 'PATCH');
+}
+
 export type AdminAccountAction = {
   action: 'FREEZE' | 'UNFREEZE' | 'LOCK' | 'UNLOCK' | 'CLOSE' | 'ARCHIVE' | 'CREDIT' | 'DEBIT';
   reason?: string;
@@ -548,6 +577,17 @@ export async function getAdminCustomerDetail(userId: string) {
 
 export async function updateAdminCustomer(userId: string, input: Record<string, unknown>) {
   return postJson<Record<string, unknown>>(`/api/v1/admin/customers/${userId}`, input, 'PATCH');
+}
+
+export async function removeAdminCustomer(userId: string, reason?: string) {
+  return requestJson<{ id: string; status: string; removed: boolean }>(
+    `/api/v1/admin/customers/${userId}`,
+    {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    },
+  );
 }
 
 export async function decideAdminKyc(
@@ -631,8 +671,9 @@ export async function generateAdminPresentation(
   );
 }
 
-// ── Bank directory (sandbox until a provider is connected) ──────────────────
-
+// ── Bank directory ──────────────────────────────────────────────────────────
+// `sandbox` is internal metadata (built-in default list vs a configured
+// provider); it is not surfaced in the customer UI.
 export type BankDirectoryEntry = { id: string; name: string; routingNumber: string; sandbox: boolean };
 
 export async function searchBanks(q?: string) {

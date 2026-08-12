@@ -9,6 +9,7 @@ describe('NotificationService', () => {
     findNotificationById: jest.fn(),
     searchNotifications: jest.fn(),
     updateNotificationStatus: jest.fn(),
+    softDeleteNotification: jest.fn(),
   };
 
   const mapper = {
@@ -162,5 +163,22 @@ describe('NotificationService', () => {
 
     expect(result).toEqual({ id: 'notif-1', status: DeliveryStatus.CANCELLED });
     expect(repository.updateNotificationStatus).toHaveBeenCalledWith('notif-1', DeliveryStatus.CANCELLED);
+  });
+
+  it('clears (soft-deletes) a notification the caller owns', async () => {
+    repository.findNotificationById.mockResolvedValue(notificationRecord); // userId: user-1
+    mapper.toNotificationDto.mockReturnValue({ id: 'notif-1' });
+
+    const result = await service.clearForUser('user-1', 'notif-1');
+
+    expect(result).toEqual({ id: 'notif-1', cleared: true });
+    expect(repository.softDeleteNotification).toHaveBeenCalledWith('notif-1');
+  });
+
+  it('refuses to clear a notification owned by another user and does not delete it', async () => {
+    repository.findNotificationById.mockResolvedValue({ ...notificationRecord, userId: 'user-2' });
+
+    await expect(service.clearForUser('user-1', 'notif-1')).rejects.toThrow(NotFoundException);
+    expect(repository.softDeleteNotification).not.toHaveBeenCalled();
   });
 });

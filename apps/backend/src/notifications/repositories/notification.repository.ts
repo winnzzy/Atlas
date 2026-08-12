@@ -169,6 +169,18 @@ export class NotificationRepository {
     });
   }
 
+  /**
+   * Soft-delete a notification so it drops out of the recipient's list.
+   * searchNotifications already filters `deletedAt: null`, so the cleared
+   * notification disappears while the row (and its audit trail) is preserved.
+   */
+  async softDeleteNotification(id: string): Promise<void> {
+    await this.prisma.notification.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
+  }
+
   async findNotificationById(id: string): Promise<NotificationView | null> {
     const notification = await this.prisma.notification.findUnique({
       where: { id },

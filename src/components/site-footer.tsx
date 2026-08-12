@@ -1,6 +1,10 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Mail, MapPin, Phone, ShieldCheck } from 'lucide-react';
 import { siteConfig } from '@/lib/site-config';
+import { getPublicContact, type PublicContact } from '@/lib/api';
 
 /** Renders a verified value, or a clearly-marked placeholder when unset. */
 function ContactValue({ value, placeholder }: { value: string | null; placeholder: string }) {
@@ -10,6 +14,23 @@ function ContactValue({ value, placeholder }: { value: string | null; placeholde
 
 export function SiteFooter() {
   const year = 2026;
+
+  // Admin-managed contact/legal values come from the backend and take priority
+  // over any build-time env fallback. Failures leave `contact` null so the env
+  // fallback / placeholders still render — the footer never breaks.
+  const [contact, setContact] = useState<PublicContact | null>(null);
+  useEffect(() => {
+    void getPublicContact()
+      .then(setContact)
+      .catch(() => setContact(null));
+  }, []);
+
+  const supportEmail = contact?.supportEmail ?? siteConfig.supportEmail;
+  const supportPhone = contact?.supportPhone ?? siteConfig.supportPhone;
+  const businessAddress = contact?.businessAddress ?? siteConfig.businessAddress;
+  const legalEntity = contact?.legalEntity ?? siteConfig.legalEntity;
+  const licenseInfo = contact?.licenseInfo ?? siteConfig.licenseInfo;
+  const depositInsuranceInfo = contact?.depositInsuranceInfo ?? siteConfig.depositInsuranceInfo;
 
   return (
     <footer id="company" className="border-t border-slate-200/70 bg-white">
@@ -30,15 +51,15 @@ export function SiteFooter() {
             <dl className="mt-6 space-y-2 text-sm">
               <div className="flex items-center gap-2">
                 <Mail className="h-4 w-4 text-slate-400" />
-                <ContactValue value={siteConfig.supportEmail} placeholder="Support email — not yet configured" />
+                <ContactValue value={supportEmail} placeholder="Support email — not yet configured" />
               </div>
               <div className="flex items-center gap-2">
                 <Phone className="h-4 w-4 text-slate-400" />
-                <ContactValue value={siteConfig.supportPhone} placeholder="Support phone — not yet configured" />
+                <ContactValue value={supportPhone} placeholder="Support phone — not yet configured" />
               </div>
               <div className="flex items-start gap-2">
                 <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
-                <ContactValue value={siteConfig.businessAddress} placeholder="Business address — not yet configured" />
+                <ContactValue value={businessAddress} placeholder="Business address — not yet configured" />
               </div>
             </dl>
           </div>
@@ -70,20 +91,20 @@ export function SiteFooter() {
         <div className="mt-12 rounded-2xl border border-slate-200 bg-slate-50/70 p-5 text-xs leading-5 text-slate-500">
           <p className="font-semibold text-slate-600">Legal &amp; Regulatory</p>
           <p className="mt-2">
-            {siteConfig.legalEntity ? (
-              <>{siteConfig.legalEntity}. </>
+            {legalEntity ? (
+              <>{legalEntity}. </>
             ) : (
               <span className="italic text-slate-400">Legal entity — not yet configured. </span>
             )}
-            {siteConfig.licenseInfo ? (
-              <>{siteConfig.licenseInfo}. </>
+            {licenseInfo ? (
+              <>{licenseInfo}. </>
             ) : (
               <span className="italic text-slate-400">Licensing information — not yet configured. </span>
             )}
           </p>
           <p className="mt-2">
-            {siteConfig.depositInsuranceInfo ? (
-              siteConfig.depositInsuranceInfo
+            {depositInsuranceInfo ? (
+              depositInsuranceInfo
             ) : (
               <span className="italic text-slate-400">
                 Deposit insurance disclosure — not yet configured. Atlas makes no deposit-insurance

@@ -39,17 +39,14 @@ export default function TransfersPage() {
   const [amount, setAmount] = useState('');
   const [memo, setMemo] = useState('');
   const [banks, setBanks] = useState<BankDirectoryEntry[]>([]);
-  const [banksSandbox, setBanksSandbox] = useState(false);
 
   const isExternal = TRANSFER_TYPES.find((entry) => entry.value === type)?.external ?? false;
 
-  // Load the configurable bank directory for the searchable selector. It is
-  // sandbox data until a real bank-directory provider is connected.
+  // Load the configurable bank directory for the searchable selector.
   useEffect(() => {
     void searchBanks()
       .then((result) => {
         setBanks(result.items ?? []);
-        setBanksSandbox(Boolean(result.sandbox));
       })
       .catch(() => setBanks([]));
   }, []);
@@ -207,11 +204,6 @@ export default function TransfersPage() {
                           <option key={bank.id} value={bank.name} />
                         ))}
                       </datalist>
-                      {banksSandbox ? (
-                        <p className="mt-1 text-xs text-amber-600">
-                          Sandbox bank directory — no live bank network is connected yet.
-                        </p>
-                      ) : null}
                     </div>
                     <div>
                       <label className="mb-1 block text-sm font-medium text-slate-700">Account type</label>

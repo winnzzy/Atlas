@@ -8,6 +8,8 @@ import { AdminAuditService } from '../services/admin-audit.service';
 import { AdminReportingService } from '../services/admin-reporting.service';
 import { AdminSearchService } from '../services/admin-search.service';
 import { AdminSettingsService } from '../services/admin-settings.service';
+import { UpdatePublicContactDto } from '../../settings/dto/public-contact.dto';
+import { PublicContactService } from '../../settings/public-contact.service';
 
 @ApiTags('Admin System')
 @ApiBearerAuth()
@@ -19,6 +21,7 @@ export class AdminSystemController {
     private readonly auditService: AdminAuditService,
     private readonly reportingService: AdminReportingService,
     private readonly settingsService: AdminSettingsService,
+    private readonly publicContactService: PublicContactService,
     private readonly policy: AdminPolicy,
   ) {}
 
@@ -70,5 +73,23 @@ export class AdminSystemController {
   updateSettings(@Headers('x-admin-role') role: AdminRole, @Body() body: UpdateAdminSettingsDto) {
     this.policy.assertAllowed(role, 'settings.write');
     return this.settingsService.updateSettings(body);
+  }
+
+  @Get('settings/public-contact')
+  @ApiOperation({ summary: 'Get public contact / footer information' })
+  getPublicContact(@Headers('x-admin-role') role: AdminRole) {
+    this.policy.assertAllowed(role, 'settings.read');
+    return this.publicContactService.getContact();
+  }
+
+  @Patch('settings/public-contact')
+  @ApiOperation({ summary: 'Update public contact / footer information' })
+  updatePublicContact(
+    @Headers('x-admin-role') role: AdminRole,
+    @Headers('x-admin-id') adminId: string,
+    @Body() body: UpdatePublicContactDto,
+  ) {
+    this.policy.assertAllowed(role, 'settings.write');
+    return this.publicContactService.updateContact(body, adminId);
   }
 }

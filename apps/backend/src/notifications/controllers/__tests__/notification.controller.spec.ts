@@ -20,6 +20,7 @@ describe('NotificationController', () => {
     markReadForUser: jest.fn(),
     cancel: jest.fn(),
     cancelForUser: jest.fn(),
+    clearForUser: jest.fn(),
   };
 
   const user = { id: 'user-1', email: 'user-1@atlas.test' } as never;
@@ -88,6 +89,16 @@ describe('NotificationController', () => {
     expect(cancelResult.status).toBe('CANCELLED');
     expect(notificationService.markReadForUser).toHaveBeenCalledWith('user-1', 'notif-1');
     expect(notificationService.cancelForUser).toHaveBeenCalledWith('user-1', 'notif-1');
+  });
+
+  it('clears a notification scoped to the authenticated user', async () => {
+    notificationService.clearForUser.mockResolvedValue({ id: 'notif-1', cleared: true });
+
+    const result = await controller.clear(user, 'notif-1');
+
+    expect(result).toEqual({ id: 'notif-1', cleared: true });
+    // The service enforces ownership; the controller must pass the caller's id.
+    expect(notificationService.clearForUser).toHaveBeenCalledWith('user-1', 'notif-1');
   });
 
   it('handles preference endpoints success and error', async () => {

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { PageHeader } from '@/components/ui/page-header';
 import { loadDashboardData, type DashboardNotification } from '@/lib/api-data';
-import { markNotificationRead } from '@/lib/api';
+import { clearNotification, markNotificationRead } from '@/lib/api';
 
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<DashboardNotification[]>([]);
@@ -33,6 +33,17 @@ export default function NotificationsPage() {
     );
     try {
       await markNotificationRead(id);
+    } catch {
+      await refresh();
+    }
+  };
+
+  const clear = async (id: string) => {
+    // Optimistically drop it, then persist the removal server-side. On failure,
+    // reload so the list reflects the true persisted state again.
+    setNotifications((current) => current.filter((notification) => notification.id !== id));
+    try {
+      await clearNotification(id);
     } catch {
       await refresh();
     }
@@ -70,7 +81,7 @@ export default function NotificationsPage() {
                     <p className="font-semibold text-slate-900">{item.title}</p>
                     <p className="mt-1 text-sm text-slate-600">{item.message}</p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                     {item.read ? (
                       <Badge variant="success">Read</Badge>
                     ) : (
@@ -81,6 +92,9 @@ export default function NotificationsPage() {
                         </Button>
                       </>
                     )}
+                    <Button variant="ghost" onClick={() => void clear(item.id)}>
+                      Clear
+                    </Button>
                   </div>
                 </div>
               </div>

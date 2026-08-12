@@ -4,9 +4,23 @@ import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { AdminState, useAdminResource } from '@/components/admin/admin-panel';
 import { loadAdminSettings } from '@/lib/admin-data';
-import { updateAdminSettings } from '@/lib/api';
+import { getAdminPublicContact, updateAdminPublicContact, updateAdminSettings } from '@/lib/api';
+
+const CONTACT_FIELDS: { key: string; label: string; placeholder: string }[] = [
+  { key: 'supportPhone', label: 'Support phone', placeholder: '+1 (555) 010-0000' },
+  { key: 'supportEmail', label: 'Support email', placeholder: 'support@example.com' },
+  { key: 'businessAddress', label: 'Business address', placeholder: 'Street, City, State ZIP' },
+  { key: 'legalEntity', label: 'Legal entity', placeholder: 'Registered legal entity name' },
+  { key: 'licenseInfo', label: 'Licensing information', placeholder: 'License / registration details' },
+  {
+    key: 'depositInsuranceInfo',
+    label: 'Deposit insurance / regulatory disclosure',
+    placeholder: 'Only enter verified regulatory information',
+  },
+];
 
 export default function AdminSettingsPage() {
   const { data, loading, error, reload } = useAdminResource(loadAdminSettings);
@@ -17,12 +31,44 @@ export default function AdminSettingsPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  // Public contact / footer information
+  const [contact, setContact] = useState<Record<string, string>>({});
+  const [contactSaving, setContactSaving] = useState(false);
+  const [contactError, setContactError] = useState<string | null>(null);
+  const [contactNotice, setContactNotice] = useState<string | null>(null);
+
   useEffect(() => {
     if (data) {
       setFeatureFlags(data.featureFlags);
       setMaintenanceMode(data.maintenanceMode);
     }
   }, [data]);
+
+  useEffect(() => {
+    void getAdminPublicContact()
+      .then((values) => {
+        setContact(
+          Object.fromEntries(CONTACT_FIELDS.map(({ key }) => [key, (values as Record<string, string | null>)[key] ?? ''])),
+        );
+      })
+      .catch(() => setContact({}));
+  }, []);
+
+  const saveContact = async () => {
+    setContactSaving(true);
+    setContactError(null);
+    setContactNotice(null);
+    try {
+      await updateAdminPublicContact(
+        Object.fromEntries(CONTACT_FIELDS.map(({ key }) => [key, contact[key] ?? ''])),
+      );
+      setContactNotice('Contact information updated successfully.');
+    } catch (cause) {
+      setContactError(cause instanceof Error ? cause.message : 'Unable to save contact information');
+    } finally {
+      setContactSaving(false);
+    }
+  };
 
   const save = async () => {
     setSaving(true);
@@ -104,6 +150,47 @@ export default function AdminSettingsPage() {
                 {saving ? 'Saving…' : 'Save settings'}
               </Button>
             </AdminState>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Public contact</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-slate-500">
+              These values appear in the public site footer. Leave a field blank to show its
+              placeholder. Only enter verified legal or regulatory information.
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {CONTACT_FIELDS.map(({ key, label, placeholder }) => (
+                <div key={key}>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">{label}</label>
+                  <Input
+                    value={contact[key] ?? ''}
+                    placeholder={placeholder}
+                    onChange={(event) =>
+                      setContact((current) => ({ ...current, [key]: event.target.value }))
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+
+            {contactError ? (
+              <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+                {contactError}
+              </p>
+            ) : null}
+            {contactNotice ? (
+              <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700" role="status">
+                {contactNotice}
+              </p>
+            ) : null}
+
+            <Button onClick={() => void saveContact()} disabled={contactSaving}>
+              {contactSaving ? 'Saving…' : 'Save changes'}
+            </Button>
           </CardContent>
         </Card>
 

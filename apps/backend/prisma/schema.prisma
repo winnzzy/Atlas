@@ -1606,6 +1606,18 @@ model AdminAction {
   @@map("admin_actions")
 }
 
+/// Generic persistent key/value store for admin-managed configuration
+/// (e.g. the public site contact/footer information). Values are JSON so a
+/// single row can hold a small structured document.
+model SystemSetting {
+  key       String   @id @db.VarChar(100)
+  value     Json     @db.JsonB
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+  updatedBy String?  @map("updated_by") @db.VarChar(100)
+
+  @@map("system_settings")
+}
+
 // ============================================================
 // MODELS - Audit Domain
 // ============================================================

@@ -6,6 +6,7 @@ import { CardsModule } from '../cards/cards.module';
 import { InvestmentsModule } from '../investments/investments.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { SettingsModule } from '../settings/settings.module';
 import { TransactionsModule } from '../transactions/transactions.module';
 import { TransfersModule } from '../transfers/transfers.module';
 import { AdminDashboardController } from './controllers/admin-dashboard.controller';
@@ -43,6 +44,7 @@ import { AdminValidator } from './validators/admin.validator';
     TransfersModule,
     InvestmentsModule,
     NotificationsModule,
+    SettingsModule,
   ],
   controllers: [AdminDashboardController, AdminManagementController, AdminSystemController],
   providers: [

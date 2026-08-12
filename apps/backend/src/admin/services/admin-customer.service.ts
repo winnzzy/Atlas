@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import { KycStatus, NotificationType } from '@prisma/client';
+import { KycStatus, NotificationType, UserStatus } from '@prisma/client';
 import type { AuthenticatedUser } from '../../accounts/policies/account.policy';
 import { AccountService } from '../../accounts/services/account.service';
 import type { AccountResponseDto } from '../../accounts/dto/account-response.dto';
@@ -339,6 +339,50 @@ export class AdminCustomerService {
       performedBy: action.adminUserId,
       createdAt: action.createdAt.toISOString(),
     }));
+  }
+
+  /**
+   * Remove (deactivate) a customer from active banking access.
+   *
+   * This is a soft removal, never a hard delete: the user row is retained and
+   * marked `deletedAt`/CLOSED so that all financial and audit records
+   * (transactions, ledger lines, transfers, admin actions) stay intact for
+   * integrity and compliance. Because auth lookups and the JWT/session guards
+   * reject users with a non-null `deletedAt` or a non-ACTIVE status, the
+   * customer can no longer sign in, and they drop out of the active customer
+   * lists/counts (which all filter `deletedAt: null`).
+   */
+  async removeCustomer(
+    adminId: string,
+    userId: string,
+    reason?: string,
+  ): Promise<{ id: string; status: string; removed: boolean }> {
+    const user = await this.requireUser(userId);
+    const removedAt = new Date();
+    const metadata = this.metadataObject(user.metadata);
+    metadata['removal'] = {
+      removedBy: adminId,
+      removedAt: removedAt.toISOString(),
+      reason: reason ?? null,
+    };
+
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        deletedAt: removedAt,
+        status: UserStatus.CLOSED,
+        metadata: metadata as Prisma.InputJsonValue,
+      },
+    });
+
+    await this.recordAction(adminId, 'CUSTOMER_REMOVE', 'USER', userId, {
+      reason: reason ?? null,
+      removedAt: removedAt.toISOString(),
+      previousStatus: user.status,
+      financialRecordsPreserved: true,
+    });
+
+    return { id: updated.id, status: updated.status, removed: true };
   }
 
   /** Presentation-activity status for the admin view (§18) + idempotency (§7). */

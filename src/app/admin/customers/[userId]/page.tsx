@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,7 @@ import {
   getAdminCustomerDetail,
   getAdminPresentationStatus,
   releaseAdminAccountRestriction,
+  removeAdminCustomer,
   updateAdminCustomer,
   type AdminCustomerDetail,
   type AdminPresentationStatus,
@@ -42,6 +43,7 @@ function kycVariant(status: string): 'success' | 'warning' | 'danger' | 'default
 
 export default function AdminCustomerDetailPage() {
   const params = useParams<{ userId: string }>();
+  const router = useRouter();
   const userId = params.userId;
 
   const [detail, setDetail] = useState<AdminCustomerDetail | null>(null);
@@ -67,6 +69,10 @@ export default function AdminCustomerDetailPage() {
   const [presTarget, setPresTarget] = useState(DEFAULT_PRESENTATION_TARGET);
   const [presStatus, setPresStatus] = useState<AdminPresentationStatus | null>(null);
   const [presConfirmOpen, setPresConfirmOpen] = useState(false);
+
+  // Remove customer
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const [removeReason, setRemoveReason] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -177,6 +183,20 @@ export default function AdminCustomerDetailPage() {
         }),
       'Customer profile updated.',
     );
+
+  const removeCustomer = async () => {
+    setRemoveOpen(false);
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await removeAdminCustomer(userId, removeReason.trim() || undefined);
+      router.push('/admin/customers');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to remove customer');
+      setBusy(false);
+    }
+  };
 
   if (loading) {
     return <p className="text-sm text-slate-600">Loading customer…</p>;
@@ -467,6 +487,49 @@ export default function AdminCustomerDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Danger zone — remove customer */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Remove customer</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-slate-600">
+            Removing a customer revokes their banking access and hides them from active customer
+            lists. Financial and audit records are preserved for integrity and compliance.
+          </p>
+          <Button variant="danger" disabled={busy} onClick={() => setRemoveOpen(true)}>
+            Remove customer
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Remove customer confirmation modal */}
+      <Modal open={removeOpen} title="Remove customer?" onClose={() => setRemoveOpen(false)}>
+        <div className="space-y-3">
+          <p className="text-sm text-slate-600">
+            This will remove{' '}
+            <span className="font-medium text-slate-900">
+              {detail.firstName} {detail.lastName}
+            </span>{' '}
+            from active banking access. They will no longer be able to sign in. Financial and audit
+            records are preserved.
+          </p>
+          <Input
+            value={removeReason}
+            onChange={(event) => setRemoveReason(event.target.value)}
+            placeholder="Reason (optional)"
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setRemoveOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" disabled={busy} onClick={() => void removeCustomer()}>
+              Remove customer
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Reject KYC modal */}
       <Modal open={rejectOpen} title="Reject KYC" onClose={() => setRejectOpen(false)}>

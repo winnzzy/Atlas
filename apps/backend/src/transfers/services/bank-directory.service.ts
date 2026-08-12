@@ -11,28 +11,29 @@ export interface BankDirectoryEntry {
 /**
  * Configurable bank-directory abstraction.
  *
- * Atlas has no live bank-directory provider connected, so this returns clearly
- * labelled sandbox entries by default and never presents itself as a real
- * external institution directory. When a real provider is integrated, replace
- * `loadEntries()` with a call to it (or set ATLAS_BANK_DIRECTORY to a JSON array
- * of `{ id, name, routingNumber }`); the abstraction and callers stay the same.
+ * The directory returns a set of generic institution names for the transfer
+ * bank selector. When a real provider is integrated, replace `loadEntries()`
+ * with a call to it (or set ATLAS_BANK_DIRECTORY to a JSON array of
+ * `{ id, name, routingNumber }`); the abstraction and callers stay the same.
+ * The `sandbox` flag is internal metadata only — it distinguishes the built-in
+ * default list from a configured provider and is never shown to customers.
  */
 @Injectable()
 export class BankDirectoryService {
   private readonly logger = new Logger(BankDirectoryService.name);
 
-  private readonly sandboxEntries: BankDirectoryEntry[] = [
-    { id: 'sbx-001', name: 'Atlas Sandbox Bank', routingNumber: '110000000', sandbox: true },
-    { id: 'sbx-002', name: 'Sandbox Community Credit Union', routingNumber: '111000025', sandbox: true },
-    { id: 'sbx-003', name: 'Test National Savings', routingNumber: '122000247', sandbox: true },
-    { id: 'sbx-004', name: 'Demo Federal Bank', routingNumber: '123000220', sandbox: true },
-    { id: 'sbx-005', name: 'Example Trust & Deposit', routingNumber: '124000054', sandbox: true },
+  private readonly defaultEntries: BankDirectoryEntry[] = [
+    { id: 'bd-001', name: 'First National Bank', routingNumber: '110000000', sandbox: true },
+    { id: 'bd-002', name: 'Community Trust Credit Union', routingNumber: '111000025', sandbox: true },
+    { id: 'bd-003', name: 'Metro National Savings', routingNumber: '122000247', sandbox: true },
+    { id: 'bd-004', name: 'Pacific Federal Bank', routingNumber: '123000220', sandbox: true },
+    { id: 'bd-005', name: 'Heritage Trust & Deposit', routingNumber: '124000054', sandbox: true },
   ];
 
   private loadEntries(): BankDirectoryEntry[] {
     const raw = process.env['ATLAS_BANK_DIRECTORY'];
     if (!raw) {
-      return this.sandboxEntries;
+      return this.defaultEntries;
     }
     try {
       const parsed = JSON.parse(raw) as Array<{ id?: string; name?: string; routingNumber?: string }>;
@@ -44,14 +45,14 @@ export class BankDirectoryService {
           routingNumber: entry.routingNumber as string,
           sandbox: false,
         }));
-      return entries.length > 0 ? entries : this.sandboxEntries;
+      return entries.length > 0 ? entries : this.defaultEntries;
     } catch (error) {
       this.logger.warn(
-        `ATLAS_BANK_DIRECTORY is not valid JSON, falling back to sandbox entries: ${
+        `ATLAS_BANK_DIRECTORY is not valid JSON, falling back to default entries: ${
           error instanceof Error ? error.message : 'unknown error'
         }`,
       );
-      return this.sandboxEntries;
+      return this.defaultEntries;
     }
   }
 

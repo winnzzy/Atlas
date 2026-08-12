@@ -100,6 +100,18 @@ export class AdminManagementController {
     return this.customerService.getCustomerDetail(userId);
   }
 
+  @Delete('customers/:userId')
+  @ApiOperation({ summary: 'Remove (deactivate) a customer — preserves financial/audit records' })
+  removeCustomer(
+    @Headers('x-admin-role') role: AdminRole,
+    @Headers('x-admin-id') adminId: string,
+    @Param('userId') userId: string,
+    @Body('reason') reason?: string,
+  ) {
+    this.policy.assertAllowed(role, 'customer.manage');
+    return this.customerService.removeCustomer(adminId, userId, reason);
+  }
+
   @Patch('customers/:userId')
   @ApiOperation({ summary: 'Update customer profile fields' })
   updateCustomer(

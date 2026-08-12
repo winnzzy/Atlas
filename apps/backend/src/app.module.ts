@@ -14,6 +14,7 @@ import { CardsModule } from './cards/cards.module';
 import { InvestmentsModule } from './investments/investments.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AdminModule } from './admin/admin.module';
+import { SettingsModule } from './settings/settings.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { AdminModule } from './admin/admin.module';
     InvestmentsModule,
     NotificationsModule,
     AdminModule,
+    SettingsModule,
   ],
 })
 export class AppModule {}

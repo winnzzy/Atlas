@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import type { AccountService } from '../../../accounts/services/account.service';
 import type { NotificationService } from '../../../notifications/services/notification.service';
 import type { PrismaService } from '../../../prisma/prisma.service';
@@ -188,6 +188,41 @@ describe('AdminCustomerService', () => {
       }),
     );
     expect(result.finalBalance).toBe('4700000.00');
+  });
+
+  it('removes (deactivates) a customer, preserving records, and audits it', async () => {
+    const prisma = buildPrisma();
+    const { service } = build(prisma);
+
+    const result = await service.removeCustomer('admin-1', 'user-1', 'fraud review');
+
+    // Soft removal: the row is retained but marked deleted + CLOSED so it drops
+    // out of active lists and login is blocked. No hard delete of financials.
+    const data = prisma.user.update.mock.calls[0][0].data;
+    expect(data.deletedAt).toBeInstanceOf(Date);
+    expect(data.status).toBe('CLOSED');
+    expect(prisma.adminAction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: 'CUSTOMER_REMOVE',
+          adminUserId: 'admin-1',
+          resourceType: 'USER',
+          resourceId: 'user-1',
+          details: expect.objectContaining({ reason: 'fraud review', financialRecordsPreserved: true }),
+        }),
+      }),
+    );
+    expect(result).toEqual(expect.objectContaining({ removed: true, status: 'CLOSED' }));
+  });
+
+  it('rejects removing a customer that does not exist or is already removed', async () => {
+    const prisma = buildPrisma(null);
+    const { service } = build(prisma);
+
+    await expect(service.removeCustomer('admin-1', 'ghost')).rejects.toBeInstanceOf(NotFoundException);
+    // Nothing is mutated and no audit action is written on a failed lookup.
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(prisma.adminAction.create).not.toHaveBeenCalled();
   });
 
   it('applies and releases an account restriction with audit + notification', async () => {

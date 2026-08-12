@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   HttpCode,
@@ -96,6 +97,18 @@ export class NotificationController {
     @Param('id') id: string,
   ): Promise<NotificationResponseDto> {
     return this.notificationService.cancelForUser(user.id, id);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Clear (remove) a notification for the current user' })
+  @ApiParam({ name: 'id', description: 'Notification ID' })
+  @ApiResponse({ status: HttpStatus.OK })
+  async clear(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ): Promise<{ id: string; cleared: boolean }> {
+    return this.notificationService.clearForUser(user.id, id);
   }
 
   @Get('preferences/:userId')

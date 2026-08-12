@@ -2,7 +2,7 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
   asChild?: boolean;
 };
 
@@ -20,6 +20,7 @@ export function Button({
     secondary: 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
     outline: 'border border-slate-200 bg-slate-50/80 text-slate-700 hover:border-slate-300 hover:bg-white',
     ghost: 'bg-transparent text-slate-600 hover:bg-slate-100',
+    danger: 'bg-red-600 text-white shadow-[0_10px_24px_rgba(220,38,38,0.16)] hover:bg-red-700',
   };
 
   if (asChild && React.isValidElement(children)) {
