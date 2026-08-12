@@ -10,6 +10,9 @@ export interface TransferAuthorizationContext {
   currency: string;
   beneficiaryId?: string;
   destinationAccountId?: string;
+  // True when the caller supplied inline external destination details
+  // (beneficiary name + external account number) rather than a saved beneficiary.
+  hasExternalDestination?: boolean;
   accountStatus?: string;
   availableBalance?: string;
   reference?: string;
@@ -35,7 +38,10 @@ export class TransferPolicy {
       violations.push('Transfer currency is required');
     }
 
-    if (!this.validator.validateTransferType(ctx.transferType, Boolean(ctx.destinationAccountId), Boolean(ctx.beneficiaryId))) {
+    // A saved beneficiary OR inline external destination details both satisfy the
+    // "destination" requirement for non-internal transfers.
+    const hasBeneficiary = Boolean(ctx.beneficiaryId) || Boolean(ctx.hasExternalDestination);
+    if (!this.validator.validateTransferType(ctx.transferType, Boolean(ctx.destinationAccountId), hasBeneficiary)) {
       violations.push('Transfer type requires a destination account or beneficiary');
     }
 

@@ -27,6 +27,7 @@ export default function TransfersPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{ routing?: string; account?: string }>({});
 
   const [type, setType] = useState<TransferType>('INTERNAL');
   const [sourceAccountId, setSourceAccountId] = useState('');
@@ -80,6 +81,24 @@ export default function TransfersPage() {
     event.preventDefault();
     setError(null);
     setSuccess(null);
+    setFieldErrors({});
+
+    // Client-side US banking-format validation. The backend re-validates these,
+    // so this is a fast, friendly first pass — never the only line of defence.
+    if (isExternal) {
+      const nextErrors: { routing?: string; account?: string } = {};
+      if (!/^\d{9}$/.test(routingNumber)) {
+        nextErrors.routing = 'Routing number must be exactly 9 digits.';
+      }
+      if (!/^\d{4,17}$/.test(accountNumber)) {
+        nextErrors.account = 'Account number must contain 4–17 digits.';
+      }
+      if (Object.keys(nextErrors).length > 0) {
+        setFieldErrors(nextErrors);
+        return;
+      }
+    }
+
     setSubmitting(true);
 
     try {
@@ -93,25 +112,30 @@ export default function TransfersPage() {
               beneficiaryName,
               routingNumber,
               bankName,
-              reference: accountNumber ? `ACCT-${accountNumber.slice(-4)}` : undefined,
+              destinationAccountNumber: accountNumber,
+              destinationAccountType: accountType,
             }
           : { destinationAccountId }),
         ...(memo ? { memo } : {}),
         idempotencyKey: `web-${crypto.randomUUID()}`,
       });
 
-      // Report the status the backend actually assigned. External rails are not
-      // connected, so those transfers stay pending until they are settled. If the
-      // backend supplied a specific customer message (e.g. a restricted account
-      // parked as pending), show that verbatim rather than a generic line.
+      // Report the status the backend actually assigned. If the backend supplied a
+      // specific customer message (e.g. a restricted account parked as pending),
+      // show that verbatim rather than a generic line.
       const status = String(created?.status ?? 'PENDING');
-      setSuccess(
-        created?.statusMessage
-          ? created.statusMessage
-          : status === 'COMPLETED'
-            ? 'Transfer completed and posted to your account.'
-            : `Transfer submitted. Current status: ${status.toLowerCase()}.`,
-      );
+      if (created?.statusMessage) {
+        setSuccess(created.statusMessage);
+      } else if (status === 'COMPLETED') {
+        const amountLabel = formatCurrency(Number(amount));
+        const parts = [`Transfer submitted successfully — ${amountLabel}`];
+        if (isExternal && beneficiaryName) parts.push(`to ${beneficiaryName}`);
+        if (isExternal && bankName) parts.push(`at ${bankName}`);
+        const ref = created?.reference ? ` Reference: ${created.reference}.` : '';
+        setSuccess(`${parts.join(' ')}. Status: completed.${ref}`);
+      } else {
+        setSuccess(`Transfer submitted. Current status: ${status.toLowerCase()}.`);
+      }
       setAmount('');
       setMemo('');
       await refresh();
@@ -178,8 +202,12 @@ export default function TransfersPage() {
                         value={accountNumber}
                         onChange={(event) => setAccountNumber(event.target.value)}
                         inputMode="numeric"
+                        maxLength={17}
                         required
                       />
+                      {fieldErrors.account ? (
+                        <p className="mt-1 text-xs text-red-600">{fieldErrors.account}</p>
+                      ) : null}
                     </div>
                     <div>
                       <label className="mb-1 block text-sm font-medium text-slate-700">Routing number</label>
@@ -190,6 +218,9 @@ export default function TransfersPage() {
                         maxLength={9}
                         required
                       />
+                      {fieldErrors.routing ? (
+                        <p className="mt-1 text-xs text-red-600">{fieldErrors.routing}</p>
+                      ) : null}
                     </div>
                     <div>
                       <label className="mb-1 block text-sm font-medium text-slate-700">Bank</label>
@@ -253,9 +284,9 @@ export default function TransfersPage() {
                 <div className="md:col-span-2 space-y-3">
                   {isExternal ? (
                     <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                      External transfers are submitted for processing and remain pending until they
-                      settle — no external settlement rail is connected yet. Verification (KYC) must be
-                      approved and the account must be unrestricted before a transfer can be initiated.
+                      Verification (KYC) must be approved and the account must be unrestricted before a
+                      transfer can be initiated. Enter the recipient&apos;s bank, account and routing
+                      numbers to send.
                     </p>
                   ) : null}
                   {error ? (

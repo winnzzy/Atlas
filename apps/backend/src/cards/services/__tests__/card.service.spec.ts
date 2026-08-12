@@ -8,7 +8,9 @@ import { CardMapper } from '../../mappers/card.mapper';
 import { AccountService } from '../../../accounts/services/account.service';
 import { TransactionService } from '../../../transactions/services/transaction.service';
 import { LedgerService } from '../../../ledger/services/ledger.service';
+import { PrismaService } from '../../../prisma/prisma.service';
 import { CardStatus, CardType, CardTransactionType } from '../../enums/card.enums';
+import { createCardPrismaDouble } from './card-prisma.double';
 
 describe('CardService', () => {
   it('issues a card for a valid account holder', async () => {
@@ -21,6 +23,7 @@ describe('CardService', () => {
       providers: [
         CardService,
         CardRepository,
+        { provide: PrismaService, useValue: createCardPrismaDouble() },
         CardPolicy,
         CardValidator,
         CardMapper,
@@ -54,6 +57,7 @@ describe('CardService', () => {
       providers: [
         CardService,
         CardRepository,
+        { provide: PrismaService, useValue: createCardPrismaDouble() },
         CardPolicy,
         CardValidator,
         CardMapper,
@@ -91,6 +95,7 @@ describe('CardService', () => {
       providers: [
         CardService,
         CardRepository,
+        { provide: PrismaService, useValue: createCardPrismaDouble() },
         CardPolicy,
         CardValidator,
         CardMapper,
@@ -136,6 +141,7 @@ describe('CardService', () => {
       providers: [
         CardService,
         CardRepository,
+        { provide: PrismaService, useValue: createCardPrismaDouble() },
         CardPolicy,
         CardValidator,
         CardMapper,
@@ -171,5 +177,55 @@ describe('CardService', () => {
     expect(authorization.status).toBe('AUTHORIZED');
     expect(ledgerService.createHold).toHaveBeenCalledTimes(1);
     expect(transactionService.createTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('persists the application scoped to its customer/account and never exposes PAN or CVV', async () => {
+    const accountService = {
+      findById: jest.fn().mockResolvedValue({ id: 'acc-9', status: 'ACTIVE' }),
+      isAccountHolder: jest.fn().mockResolvedValue(true),
+    };
+    const transactionService = { createTransaction: jest.fn() };
+    const ledgerService = { createHold: jest.fn(), releaseHold: jest.fn() };
+
+    const module = await Test.createTestingModule({
+      providers: [
+        CardService,
+        CardRepository,
+        { provide: PrismaService, useValue: createCardPrismaDouble() },
+        CardPolicy,
+        CardValidator,
+        CardMapper,
+        { provide: AccountService, useValue: accountService },
+        { provide: TransactionService, useValue: transactionService },
+        { provide: LedgerService, useValue: ledgerService },
+        { provide: EventEmitter2, useValue: { emit: jest.fn() } },
+      ],
+    }).compile();
+
+    const service = module.get(CardService);
+    const owner = { id: 'user-9' } as never;
+
+    const application = await service.issueCard(
+      owner,
+      { accountId: 'acc-9', type: CardType.VIRTUAL_DEBIT } as never,
+      { requiresApproval: true },
+    );
+
+    // The card is persisted and linked to the applying customer + account.
+    const owned = await service.searchCards(owner, {} as never);
+    expect(owned.items.map((card) => card.id)).toContain(application.id);
+    expect(owned.items.find((card) => card.id === application.id)?.accountId).toBe('acc-9');
+
+    // A different customer cannot see it.
+    const other = await service.searchCards({ id: 'intruder' } as never, {} as never);
+    expect(other.items).toHaveLength(0);
+
+    // The customer response never carries the full PAN or any CVV.
+    expect(application).not.toHaveProperty('cardNumber');
+    expect(JSON.stringify(application).toLowerCase()).not.toContain('cvv');
+
+    // Applying for a card touches neither a money transaction nor the ledger.
+    expect(transactionService.createTransaction).not.toHaveBeenCalled();
+    expect(ledgerService.createHold).not.toHaveBeenCalled();
   });
 });

@@ -380,6 +380,8 @@ export type CreateTransferInput = {
   routingNumber?: string;
   bankName?: string;
   beneficiaryName?: string;
+  destinationAccountNumber?: string;
+  destinationAccountType?: string;
   description?: string;
   memo?: string;
   reference?: string;

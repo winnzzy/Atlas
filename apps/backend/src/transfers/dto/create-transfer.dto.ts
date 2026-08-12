@@ -187,6 +187,18 @@ export class CreateTransferDto {
   @MaxLength(255)
   beneficiaryName?: string;
 
+  @ApiPropertyOptional({ description: 'External destination account number' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(34)
+  destinationAccountNumber?: string;
+
+  @ApiPropertyOptional({ description: 'External destination account type', enum: ['CHECKING', 'SAVINGS'] })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  destinationAccountType?: string;
+
   @ApiPropertyOptional({ description: 'Additional metadata' })
   @IsOptional()
   metadata?: Record<string, string>;

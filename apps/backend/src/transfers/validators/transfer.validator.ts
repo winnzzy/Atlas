@@ -8,6 +8,13 @@ export class TransferValidator {
     return /^\d{9}$/.test(routingNumber);
   }
 
+  // Supported US account-number range for this application: 4–17 digits, digits only.
+  // This is the app's accepted range, not a universal banking standard.
+  validateAccountNumber(accountNumber?: string): boolean {
+    if (!accountNumber) return true;
+    return /^\d{4,17}$/.test(accountNumber);
+  }
+
   validateSwiftCode(swiftCode?: string): boolean {
     if (!swiftCode) return true;
     return /^[A-Z0-9]{8}([A-Z0-9]{3})?$/.test(swiftCode.toUpperCase());

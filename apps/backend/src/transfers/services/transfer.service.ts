@@ -197,6 +197,24 @@ export class TransferService {
       throw new TransferValidationException('Internal transfers require a valid destination Atlas account');
     }
 
+    // Inline external destination: the customer typed the recipient bank details
+    // directly (no saved beneficiary, no internal destination account).
+    const isExternal = dto.type !== TransferType.INTERNAL;
+    const hasExternalDestination = isExternal && !beneficiary && !destinationAccount
+      ? Boolean(dto.beneficiaryName) && Boolean(dto.destinationAccountNumber)
+      : false;
+
+    // Validate the supplied US banking details with clear, field-level messages
+    // before the policy runs, so the customer sees the precise problem.
+    if (hasExternalDestination) {
+      if (!this.validator.validateRoutingNumber(dto.routingNumber)) {
+        throw new TransferValidationException('Routing number must be exactly 9 digits.');
+      }
+      if (!this.validator.validateAccountNumber(dto.destinationAccountNumber)) {
+        throw new TransferValidationException('Account number must contain 4–17 digits.');
+      }
+    }
+
     const policyResult = this.policy.authorize({
       transferType: dto.type,
       sourceAccountId: dto.sourceAccountId,
@@ -204,6 +222,7 @@ export class TransferService {
       currency: dto.currency,
       beneficiaryId: dto.beneficiaryId,
       destinationAccountId: dto.destinationAccountId,
+      hasExternalDestination,
       accountStatus: sourceAccount.status,
       availableBalance: sourceAccount.availableBalance?.toString?.() ?? undefined,
       reference: dto.reference,
@@ -213,12 +232,16 @@ export class TransferService {
       throw new TransferPolicyViolationException(policyResult.violations.join('; '));
     }
 
-    if (dto.type !== TransferType.INTERNAL && !beneficiary && !destinationAccount) {
+    if (isExternal && !beneficiary && !destinationAccount && !hasExternalDestination) {
       throw new TransferValidationException('Non-internal transfers require a beneficiary or destination account');
     }
 
     if (dto.routingNumber && !this.validator.validateRoutingNumber(dto.routingNumber)) {
-      throw new TransferValidationException('Routing number must be 9 digits');
+      throw new TransferValidationException('Routing number must be exactly 9 digits.');
+    }
+
+    if (dto.destinationAccountNumber && !this.validator.validateAccountNumber(dto.destinationAccountNumber)) {
+      throw new TransferValidationException('Account number must contain 4–17 digits.');
     }
 
     if (dto.swiftCode && !this.validator.validateSwiftCode(dto.swiftCode)) {
@@ -255,7 +278,7 @@ export class TransferService {
       scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : undefined,
       createdAt: now,
       updatedAt: now,
-      metadata: dto.metadata,
+      metadata: this.buildTransferMetadata(dto),
     };
 
     await this.repository.saveTransfer(record);
@@ -288,6 +311,9 @@ export class TransferService {
       currency: transfer.currency,
       destinationAccountId: transfer.destinationAccountId,
       beneficiaryId: transfer.beneficiaryId,
+      // The transfer already passed full validation at creation; an external
+      // transfer carries its destination inline (recipient name persisted).
+      hasExternalDestination: transfer.type !== TransferType.INTERNAL && Boolean(transfer.beneficiaryName),
     });
     if (!policyResult.allowed) {
       throw new TransferPolicyViolationException(policyResult.violations.join('; '));
@@ -299,16 +325,10 @@ export class TransferService {
     this.audit('SUBMITTED', transfer, user.id, {});
     this.emit(new TransferSubmittedEvent(transfer.id, transfer.sourceAccountId, { reference: transfer.reference }), TransferEventType.TRANSFER_SUBMITTED);
 
-    if (transfer.type !== TransferType.INTERNAL) {
-      transfer.status = TransferStatus.PROCESSING;
-      transfer.sentAt = new Date();
-      transfer.failureReason = 'External settlement rail is not configured';
-      await this.repository.updateTransfer(transfer);
-      this.audit('EXTERNAL_PROCESSING', transfer, user.id, { reason: transfer.failureReason });
-      this.emit(new TransferSentEvent(transfer.id, transfer.sourceAccountId, { settlementReference: transfer.reference }), TransferEventType.TRANSFER_SENT);
-      return this.mapper.toTransferResponse(transfer);
-    }
-
+    // Both internal and external transfers settle through the existing ledger
+    // architecture (external rails are simulated — no real ACH/wire is sent). The
+    // transaction type debits the source account so the balance decreases; there
+    // is no direct balance mutation here.
     const transaction = await this.transactionService.createTransaction({ ...this.toTransactionCreateDto(transfer), createdBy: user.id });
     transfer.settlementReference = transaction.reference;
     transfer.status = TransferStatus.PROCESSING;
@@ -558,6 +578,20 @@ export class TransferService {
 
   private mapTransferToTransactionType(type: TransferType): TransactionType {
     return TRANSFER_TO_TRANSACTION_TYPE[type] as TransactionType;
+  }
+
+  // Persist external destination context for admins. The full external account
+  // number is never stored — only the last four digits — and no customer-facing
+  // response echoes it back.
+  private buildTransferMetadata(dto: CreateTransferDto): Record<string, string> | undefined {
+    const meta: Record<string, string> = { ...(dto.metadata ?? {}) };
+    if (dto.destinationAccountNumber) {
+      meta.destinationAccountLast4 = dto.destinationAccountNumber.slice(-4);
+    }
+    if (dto.destinationAccountType) {
+      meta.destinationAccountType = dto.destinationAccountType;
+    }
+    return Object.keys(meta).length > 0 ? meta : undefined;
   }
 
   private generateReference(type: TransferType): string {

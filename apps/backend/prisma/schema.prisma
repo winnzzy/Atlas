@@ -174,11 +174,26 @@ enum CardStatus {
   PENDING_ACTIVATION
   LOST
   STOLEN
+  // Application/lifecycle statuses used by the cards domain.
+  REQUESTED
+  PENDING_VERIFICATION
+  ISSUED
+  ACTIVATED
+  LOCKED
+  EXPIRED
+  CANCELLED
+  REISSUED
 }
 
 enum CardType {
   VIRTUAL
   PHYSICAL
+  // Product variants used by the cards domain.
+  PHYSICAL_DEBIT
+  VIRTUAL_DEBIT
+  BUSINESS_DEBIT
+  SINGLE_USE_VIRTUAL
+  MERCHANT_LOCKED_VIRTUAL
 }
 
 enum CardNetwork {
@@ -192,6 +207,7 @@ enum CardSpendingCategory {
   DINING
   GROCERIES
   GAS
+  BUSINESS
 }
 
 enum CardTransactionType {
@@ -201,6 +217,15 @@ enum CardTransactionType {
   REVERSAL
   PRE_AUTH
   RECURRING
+  // Lifecycle/detail types used by the cards domain.
+  AUTHORIZATION
+  CAPTURE
+  COMPLETION
+  CHARGEBACK
+  POS_PURCHASE
+  ONLINE_PURCHASE
+  CONTACTLESS
+  RECURRING_PAYMENT
 }
 
 enum CardTransactionStatus {
@@ -209,6 +234,11 @@ enum CardTransactionStatus {
   DECLINED
   REVERSED
   REFUNDED
+  // Lifecycle statuses used by the cards domain.
+  AUTHORIZED
+  CAPTURED
+  CHARGEDBACK
+  CANCELLED
 }
 
 enum DeclineReason {

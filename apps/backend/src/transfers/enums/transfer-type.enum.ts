@@ -12,10 +12,13 @@ export enum TransferType {
   PAYROLL_BATCH = 'PAYROLL_BATCH',
 }
 
+// Maps an outbound customer transfer to the transaction posted on the SOURCE
+// account. Customer-initiated ACH sends move money OUT, so they debit the source
+// (ACH_DEBIT) — the transaction domain names types from the source account's view.
 export const TRANSFER_TO_TRANSACTION_TYPE: Record<TransferType, string> = {
-  [TransferType.ACH_CREDIT]: 'ACH_CREDIT',
+  [TransferType.ACH_CREDIT]: 'ACH_DEBIT',
   [TransferType.ACH_DEBIT]: 'ACH_DEBIT',
-  [TransferType.SAME_DAY_ACH]: 'ACH_CREDIT',
+  [TransferType.SAME_DAY_ACH]: 'ACH_DEBIT',
   [TransferType.DOMESTIC_WIRE]: 'WIRE_DOMESTIC',
   [TransferType.INTERNATIONAL_WIRE]: 'WIRE_INTERNATIONAL',
   [TransferType.SWIFT]: 'SWIFT',
