@@ -304,7 +304,7 @@ export class AdminPresentationService {
           data: {
             transactionId,
             entryType: entry.direction,
-            accountCode: account.id,
+            accountCode: account.accountNumber,
             accountName: account.name,
             amount,
             currency: account.currency,

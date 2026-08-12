@@ -129,6 +129,24 @@ describe('AdminPresentationService', () => {
     expect(snapshotSum.toFixed(2)).toBe('4700000.00');
   });
 
+  it('writes the account number (not the UUID) as the ledger line account code', async () => {
+    const prisma = buildPrisma();
+    const service = makeService(prisma);
+
+    await service.generate('user-1', { accountId: 'acc-1' });
+
+    const account = prisma.__state.account;
+    expect(prisma.__state.lines.length).toBeGreaterThan(20);
+    for (const line of prisma.__state.lines) {
+      // Regression guard: accountCode must be the account number, never the UUID.
+      // TransactionLine.accountCode is VARCHAR(20); a 36-char UUID overflows it in
+      // PostgreSQL and 500s the whole generation.
+      expect(line.accountCode).toBe(account.accountNumber);
+      expect(line.accountCode).not.toBe(account.id);
+      expect(line.accountCode.length).toBeLessThanOrEqual(20);
+    }
+  });
+
   it('spreads the generated history across roughly six months ending now', async () => {
     const prisma = buildPrisma();
     const service = makeService(prisma);
