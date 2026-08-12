@@ -213,7 +213,8 @@ export class AdminPresentationService {
     const periodStart = new Date(generatedAt);
     periodStart.setMonth(periodStart.getMonth() - months);
 
-    const result = await this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(
+      async (tx) => {
       const { account } = await this.requireAccountForCustomer(tx, userId, dto.accountId);
 
       // Determine whether presentation activity already exists.
@@ -361,7 +362,13 @@ export class AdminPresentationService {
         periodEnd: periodEnd.toISOString(),
         replaced,
       };
-    });
+      },
+      // The generator legitimately performs ~200 sequential ledger writes in one
+      // atomic transaction. Prisma's 5s interactive-transaction default is fine on
+      // localhost but times out (P2028) against a networked Postgres, so give this
+      // one long transaction the headroom it needs. Atomicity is unchanged.
+      { maxWait: 20_000, timeout: 120_000 },
+    );
 
     this.logger.log(
       `Generated presentation activity ${result.batchId} for account ${result.accountId}: ` +
