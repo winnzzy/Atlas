@@ -233,6 +233,10 @@ export class AdminOrchestrationService {
     return this.transactionService.reverseTransaction(transactionId, reason);
   }
 
+  deleteFailedTransaction(transactionId: string) {
+    return this.transactionService.deleteFailedTransaction(transactionId, ADMIN_ACTOR.id);
+  }
+
   async getLedgerView(accountId: string): Promise<unknown> {
     return this.transactionService.getAccountTransactions(accountId, 100);
   }

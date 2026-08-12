@@ -2,12 +2,17 @@
 
 import { useEffect, useState } from 'react';
 import { CreditCard } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
-import { loadDashboardData, type DashboardAccount, type DashboardCard } from '@/lib/api-data';
+import { AtlasCard } from '@/components/dashboard/atlas-card';
+import {
+  loadDashboardData,
+  type DashboardAccount,
+  type DashboardCard,
+  type DashboardProfile,
+} from '@/lib/api-data';
 import { applyForCard, freezeCard, unfreezeCard } from '@/lib/api';
 
 const CARD_TYPES = [
@@ -15,28 +20,10 @@ const CARD_TYPES = [
   { value: 'PHYSICAL_DEBIT', label: 'Physical debit card' },
 ] as const;
 
-/** Statuses where the application is still with the reviewer. */
-const PENDING_REVIEW = new Set(['REQUESTED', 'PENDING_VERIFICATION']);
-const USABLE = new Set(['ISSUED', 'ACTIVATED']);
-
-function statusLabel(status: string) {
-  if (PENDING_REVIEW.has(status)) return 'Awaiting review';
-  if (status === 'ACTIVATED') return 'Active';
-  if (status === 'ISSUED') return 'Issued — activate to use';
-  if (status === 'FROZEN') return 'Frozen';
-  if (status === 'CANCELLED') return 'Declined or cancelled';
-  return status;
-}
-
-function statusVariant(status: string) {
-  if (status === 'ACTIVATED' || status === 'ISSUED') return 'success' as const;
-  if (status === 'CANCELLED' || status === 'EXPIRED') return 'danger' as const;
-  return 'warning' as const;
-}
-
 export default function CardsPage() {
   const [cards, setCards] = useState<DashboardCard[]>([]);
   const [accounts, setAccounts] = useState<DashboardAccount[]>([]);
+  const [profile, setProfile] = useState<DashboardProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,9 +38,16 @@ export default function CardsPage() {
     const data = await loadDashboardData();
     setCards(data.cards);
     setAccounts(data.accounts);
+    setProfile(data.profile);
     if (!accountId && data.accounts[0]) {
       setAccountId(data.accounts[0].id);
     }
+  };
+
+  /** Spendable balance for a card comes from its linked bank account. */
+  const availableFor = (card: DashboardCard) => {
+    const linked = accounts.find((account) => account.id === card.accountId);
+    return linked?.available ?? card.available;
   };
 
   useEffect(() => {
@@ -190,49 +184,19 @@ export default function CardsPage() {
             </CardContent>
           </Card>
         ) : (
-          cards.map((card) => (
-            <Card key={card.id}>
-              <CardHeader>
-                <CardTitle>{card.name}</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="text-sm text-slate-500">Masked number</p>
-                  <p className="text-lg font-semibold text-slate-900">{card.maskedNumber}</p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <Badge variant={statusVariant(card.status)}>{statusLabel(card.status)}</Badge>
-                    {card.limit > 0 ? (
-                      <Badge variant="default">Limit ${card.limit.toLocaleString()}</Badge>
-                    ) : null}
-                  </div>
-                </div>
-                <div className="text-right">
-                  {PENDING_REVIEW.has(card.status) ? (
-                    <p className="text-sm text-slate-600">
-                      Your application is with an administrator for review.
-                    </p>
-                  ) : (
-                    <>
-                      <p className="text-sm text-slate-500">Available</p>
-                      <p className="text-lg font-semibold text-slate-900">
-                        ${card.available.toLocaleString()}
-                      </p>
-                      {USABLE.has(card.status) || card.status === 'FROZEN' ? (
-                        <Button
-                          className="mt-3"
-                          variant="secondary"
-                          disabled={busy}
-                          onClick={() => void toggleFreeze(card)}
-                        >
-                          {card.status === 'FROZEN' ? 'Unfreeze' : 'Freeze'}
-                        </Button>
-                      ) : null}
-                    </>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))
+          <div className="grid gap-8 sm:grid-cols-2">
+            {cards.map((card, index) => (
+              <AtlasCard
+                key={card.id}
+                card={card}
+                index={index}
+                holderName={profile?.fullName ?? ''}
+                availableBalance={availableFor(card)}
+                busy={busy}
+                onToggleFreeze={() => void toggleFreeze(card)}
+              />
+            ))}
+          </div>
         )}
       </div>
     </>

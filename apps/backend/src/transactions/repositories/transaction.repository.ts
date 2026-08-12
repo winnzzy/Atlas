@@ -267,6 +267,21 @@ export class TransactionRepository {
     };
   }
 
+  /**
+   * Soft-delete a transaction so it disappears from every admin view/history
+   * (all reads filter `deletedAt: null`). This never touches balances, ledger
+   * journals, or balance snapshots — it only hides the record.
+   */
+  async softDelete(id: string, deletedBy?: string): Promise<void> {
+    await this.prisma.transaction.update({
+      where: { id },
+      data: {
+        deletedAt: new Date(),
+        updatedBy: this.uuidOrUndefined(deletedBy),
+      },
+    });
+  }
+
   async existsByReference(reference: string): Promise<boolean> {
     return (await this.prisma.transaction.count({ where: { reference, deletedAt: null } })) > 0;
   }

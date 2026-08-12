@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { randomUUID } from 'crypto';
 import { AccountService } from '../../accounts/services/account.service';
+import { PrismaService } from '../../prisma/prisma.service';
 import { LedgerService } from '../../ledger/services/ledger.service';
 import { TransactionService } from '../../transactions/services/transaction.service';
 import { TransactionType } from '../../transactions/enums/transaction-type.enum';
@@ -37,6 +38,7 @@ export class CardService {
 
   constructor(
     @Inject(AccountService) private readonly accountService: AccountService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(TransactionService) private readonly transactionService: TransactionService,
     @Inject(LedgerService) private readonly ledgerService: LedgerService,
     @Inject(CardRepository) private readonly repository: CardRepository,
@@ -66,7 +68,7 @@ export class CardService {
       throw new CardPolicyViolationException(policyResult.violations.join('; '));
     }
 
-    const cardholderName = dto.cardholderName ?? `${user.id}`;
+    const cardholderName = dto.cardholderName ?? (await this.resolveCardholderName(user.id));
     const network = dto.network ?? CardNetwork.VISA;
     const cardNumber = this.validator.generateCardNumber(network);
     const lastFour = cardNumber.slice(-4);
@@ -732,6 +734,20 @@ export class CardService {
   private calculateExpiryDate(): { month: number; year: number } {
     const now = new Date();
     return { month: now.getMonth() + 1, year: now.getFullYear() + 3 };
+  }
+
+  /**
+   * Resolve the embossed cardholder name from the account holder's real profile.
+   * The internal user id must never appear on a card, so a customer without a
+   * stored name falls back to a neutral label rather than a UUID.
+   */
+  private async resolveCardholderName(userId: string): Promise<string> {
+    const record = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { firstName: true, lastName: true },
+    });
+    const fullName = [record?.firstName, record?.lastName].filter(Boolean).join(' ').trim();
+    return fullName.length > 0 ? fullName.toUpperCase() : 'ATLAS CARDHOLDER';
   }
 
   private pickDeclineReason(violations: string[]): CardDeclineReason {

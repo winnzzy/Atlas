@@ -60,5 +60,6 @@ export function createCardPrismaDouble() {
     cardHolder: makeTable(),
     virtualCard: makeTable(),
     cardTransaction: makeTable(),
+    user: makeTable(),
   };
 }

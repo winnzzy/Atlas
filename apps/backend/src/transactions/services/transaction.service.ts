@@ -715,6 +715,36 @@ export class TransactionService {
   }
 
   /**
+   * Permanently remove a FAILED transaction from admin views/history.
+   *
+   * Only FAILED transactions may be deleted — COMPLETED and PENDING/approval
+   * records are protected. A failed transaction never posted to the ledger, so
+   * this soft-delete moves no money: no balance change, no ledger reversal, no
+   * snapshot. An audit entry is recorded for the action.
+   */
+  async deleteFailedTransaction(id: string, performedBy?: string): Promise<{ id: string; deleted: boolean }> {
+    const transaction = await this.repository.findById(id);
+    if (!transaction) {
+      throw new TransactionNotFoundException(id);
+    }
+
+    if (transaction.status !== TransactionStatus.FAILED) {
+      throw new TransactionValidationException(
+        `Only failed transactions can be deleted (transaction ${id} is ${transaction.status})`,
+      );
+    }
+
+    await this.repository.softDelete(id, performedBy);
+
+    this.audit('DELETED', transaction, performedBy, {
+      status: transaction.status,
+      reference: transaction.reference,
+    });
+
+    return { id, deleted: true };
+  }
+
+  /**
    * Get transactions for a specific account.
    */
   async getAccountTransactions(

@@ -28,25 +28,6 @@ export class TransactionPolicy {
   private readonly logger = new Logger(TransactionPolicy.name);
 
   /**
-   * Daily transaction limits per type (in decimal string format).
-   * These would be configurable in production.
-   */
-  private readonly dailyLimits: Record<string, string> = {
-    [TransactionType.DEPOSIT]: '100000.00',
-    [TransactionType.WITHDRAWAL]: '50000.00',
-    [TransactionType.INTERNAL_TRANSFER]: '100000.00',
-    [TransactionType.ACH_CREDIT]: '25000.00',
-    [TransactionType.ACH_DEBIT]: '25000.00',
-    [TransactionType.WIRE_DOMESTIC]: '500000.00',
-    [TransactionType.WIRE_INTERNATIONAL]: '250000.00',
-    [TransactionType.SWIFT]: '250000.00',
-    [TransactionType.CARD_PURCHASE]: '10000.00',
-    [TransactionType.CARD_REFUND]: '10000.00',
-    [TransactionType.CRYPTO_DEPOSIT]: '50000.00',
-    [TransactionType.CRYPTO_WITHDRAWAL]: '50000.00',
-  };
-
-  /**
    * Minimum transaction amounts.
    */
   private readonly minimumAmounts: Record<string, string> = {
@@ -89,7 +70,7 @@ export class TransactionPolicy {
   /**
    * Full authorization check - validates the entire policy for a new transaction.
    */
-  async authorize(ctx: PolicyCheckContext, repo?: TransactionRepository): Promise<PolicyResult> {
+  async authorize(ctx: PolicyCheckContext, _repo?: TransactionRepository): Promise<PolicyResult> {
     const violations: string[] = [];
 
     // 1. Account status check
@@ -112,21 +93,15 @@ export class TransactionPolicy {
     const selfTransferCheck = this.checkSelfTransfer(ctx);
     if (!selfTransferCheck.allowed) violations.push(...selfTransferCheck.violations);
 
-    // 6. Daily limit check
-    if (repo) {
-      const dailyCheck = await this.checkDailyLimits(ctx, repo);
-      if (!dailyCheck.allowed) violations.push(...dailyCheck.violations);
-    }
-
-    // 7. Compliance hooks (placeholder)
+    // 6. Compliance hooks (placeholder)
     const complianceCheck = this.checkCompliance(ctx);
     if (!complianceCheck.allowed) violations.push(...complianceCheck.violations);
 
-    // 8. AML hooks (placeholder)
+    // 7. AML hooks (placeholder)
     const amlCheck = this.checkAML(ctx);
     if (!amlCheck.allowed) violations.push(...amlCheck.violations);
 
-    // 9. Fraud hooks (placeholder)
+    // 8. Fraud hooks (placeholder)
     const fraudCheck = this.checkFraud(ctx);
     if (!fraudCheck.allowed) violations.push(...fraudCheck.violations);
 
@@ -287,38 +262,6 @@ export class TransactionPolicy {
     return { allowed: violations.length === 0, violations };
   }
 
-  private async checkDailyLimits(
-    ctx: PolicyCheckContext,
-    repo: TransactionRepository,
-  ): Promise<PolicyResult> {
-    const violations: string[] = [];
-    const limit = this.dailyLimits[ctx.transactionType];
-
-    if (!limit) return { allowed: true, violations };
-
-    const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000 - 1);
-
-    const dailyTotal = await repo.sumAmountByAccountAndDateRange(
-      ctx.accountId,
-      startOfDay,
-      endOfDay,
-      ctx.transactionType,
-    );
-
-    const currentTotal = parseFloat(dailyTotal);
-    const requestedAmount = parseFloat(ctx.amount);
-    const limitAmount = parseFloat(limit);
-
-    if (currentTotal + requestedAmount > limitAmount) {
-      violations.push(
-        `Daily limit exceeded for ${ctx.transactionType}: limit ${limit}, already used ${dailyTotal}, requested ${ctx.amount}`,
-      );
-    }
-
-    return { allowed: violations.length === 0, violations };
-  }
 
   /**
    * Compliance hooks - placeholder for future compliance rules.

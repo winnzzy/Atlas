@@ -31,8 +31,17 @@ export type DashboardTransfer = {
 
 export type DashboardCard = {
   id: string;
+  /** Linked bank account — the card's spendable balance comes from this account. */
+  accountId: string;
   name: string;
+  cardholderName: string;
   maskedNumber: string;
+  lastFour: string;
+  network: string;
+  /** Backend card type, e.g. VIRTUAL_DEBIT / PHYSICAL_DEBIT. */
+  cardType: string;
+  /** Zero-padded MM/YY expiry, e.g. "08/30", or empty when unknown. */
+  expiry: string;
   /** Raw backend card status, e.g. REQUESTED / ISSUED / ACTIVATED / FROZEN. */
   status: string;
   limit: number;
@@ -101,10 +110,17 @@ type ApiTransfer = {
 
 type ApiCard = {
   id?: string;
+  accountId?: string;
   name?: string;
+  nickname?: string;
   cardholderName?: string;
   maskedNumber?: string;
   last4?: string;
+  lastFour?: string;
+  network?: string;
+  type?: string;
+  expiryMonth?: number | string;
+  expiryYear?: number | string;
   status?: string;
   limit?: number | string;
   creditLimit?: number | string;
@@ -130,6 +146,18 @@ type ApiHolding = {
   allocationPct?: number;
   currentValue?: number;
 };
+
+/** Formats a card expiry as zero-padded MM/YY, or '' when unknown. */
+function formatExpiry(month: unknown, year: unknown): string {
+  const monthNum = Number(month);
+  const yearNum = Number(year);
+  if (!Number.isFinite(monthNum) || !Number.isFinite(yearNum) || monthNum < 1 || monthNum > 12) {
+    return '';
+  }
+  const mm = String(monthNum).padStart(2, '0');
+  const yy = String(yearNum % 100).padStart(2, '0');
+  return `${mm}/${yy}`;
+}
 
 function parseBalance(value: unknown): number {
   if (typeof value === 'number') return value;
@@ -233,8 +261,14 @@ export async function loadDashboardData() {
   const cards = Array.isArray(cardsResponse)
     ? cardsResponse.map((card: ApiCard): DashboardCard => ({
         id: card.id ?? 'card-unknown',
-        name: card.name ?? card.cardholderName ?? 'Atlas Card',
-        maskedNumber: card.maskedNumber ?? card.last4 ?? '•••• 0000',
+        accountId: card.accountId ?? '',
+        name: card.name ?? card.nickname ?? 'Atlas Debit Card',
+        cardholderName: card.cardholderName ?? '',
+        maskedNumber: card.maskedNumber ?? card.last4 ?? '•••• •••• •••• 0000',
+        lastFour: card.lastFour ?? card.last4 ?? (card.maskedNumber ?? '').replace(/\D/g, '').slice(-4) ?? '',
+        network: card.network ?? 'VISA',
+        cardType: card.type ?? 'VIRTUAL_DEBIT',
+        expiry: formatExpiry(card.expiryMonth, card.expiryYear),
         status: card.status ?? 'UNKNOWN',
         limit: parseBalance(card.limit ?? card.creditLimit),
         available: parseBalance(card.available ?? card.availableCredit),

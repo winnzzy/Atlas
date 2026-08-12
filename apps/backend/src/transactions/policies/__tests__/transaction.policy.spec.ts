@@ -181,6 +181,32 @@ describe('TransactionPolicy', () => {
       }, repository as never);
       expect(result.allowed).toBe(true);
     });
+
+    // Item 8: the daily transfer limit was removed, so a transfer that would
+    // previously have exceeded a per-type daily cap must now be allowed.
+    it('should allow an internal transfer far above the former daily limit', async () => {
+      const result = await policy.authorize({
+        ...baseContext,
+        transactionType: TransactionType.INTERNAL_TRANSFER,
+        counterpartyAccountId: 'acc-456',
+        amount: '500000.00', // former INTERNAL_TRANSFER daily cap was 100000
+        availableBalance: '100000000.00',
+      }, repository as never);
+      expect(result.allowed).toBe(true);
+      expect(result.violations).toHaveLength(0);
+    });
+
+    it('should allow repeated ACH transfers without a daily cumulative cap', async () => {
+      // The old daily cap consulted prior same-day totals; that lookup is gone.
+      repository.sumAmountByAccountAndDateRange.mockResolvedValue('1000000.00');
+      const result = await policy.authorize({
+        ...baseContext,
+        transactionType: TransactionType.ACH_CREDIT,
+        amount: '100000.00', // former ACH daily cap was 25000
+      }, repository as never);
+      expect(result.allowed).toBe(true);
+      expect(repository.sumAmountByAccountAndDateRange).not.toHaveBeenCalled();
+    });
   });
 
   describe('canCancel', () => {

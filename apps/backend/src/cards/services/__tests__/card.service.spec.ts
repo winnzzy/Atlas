@@ -47,6 +47,70 @@ describe('CardService', () => {
     expect(card).not.toHaveProperty('isDemo');
   });
 
+  it('embosses the customer real name — never the internal user id — on the card', async () => {
+    const accountService = {
+      findById: jest.fn().mockResolvedValue({ id: 'acc-1', status: 'ACTIVE' }),
+      isAccountHolder: jest.fn().mockResolvedValue(true),
+    };
+    const prisma = createCardPrismaDouble();
+    await prisma.user.create({ data: { id: 'user-77', firstName: 'Winner', lastName: 'Namdi' } });
+
+    const module = await Test.createTestingModule({
+      providers: [
+        CardService,
+        CardRepository,
+        { provide: PrismaService, useValue: prisma },
+        CardPolicy,
+        CardValidator,
+        CardMapper,
+        { provide: AccountService, useValue: accountService },
+        { provide: TransactionService, useValue: { createTransaction: jest.fn() } },
+        { provide: LedgerService, useValue: { createHold: jest.fn(), releaseHold: jest.fn() } },
+        { provide: EventEmitter2, useValue: { emit: jest.fn() } },
+      ],
+    }).compile();
+
+    const service = module.get(CardService);
+    const card = await service.issueCard({ id: 'user-77' } as never, {
+      accountId: 'acc-1',
+      type: CardType.VIRTUAL_DEBIT,
+    } as never);
+
+    expect(card.cardholderName).toBe('WINNER NAMDI');
+    expect(card.cardholderName).not.toContain('user-77');
+  });
+
+  it('falls back to a neutral cardholder label instead of a UUID when no name is stored', async () => {
+    const accountService = {
+      findById: jest.fn().mockResolvedValue({ id: 'acc-1', status: 'ACTIVE' }),
+      isAccountHolder: jest.fn().mockResolvedValue(true),
+    };
+
+    const module = await Test.createTestingModule({
+      providers: [
+        CardService,
+        CardRepository,
+        { provide: PrismaService, useValue: createCardPrismaDouble() },
+        CardPolicy,
+        CardValidator,
+        CardMapper,
+        { provide: AccountService, useValue: accountService },
+        { provide: TransactionService, useValue: { createTransaction: jest.fn() } },
+        { provide: LedgerService, useValue: { createHold: jest.fn(), releaseHold: jest.fn() } },
+        { provide: EventEmitter2, useValue: { emit: jest.fn() } },
+      ],
+    }).compile();
+
+    const service = module.get(CardService);
+    const card = await service.issueCard({ id: 'ffffffff-ffff-4fff-8fff-ffffffffffff' } as never, {
+      accountId: 'acc-1',
+      type: CardType.VIRTUAL_DEBIT,
+    } as never);
+
+    expect(card.cardholderName).toBe('ATLAS CARDHOLDER');
+    expect(card.cardholderName).not.toContain('ffff');
+  });
+
   it('holds a customer application at REQUESTED until an admin approves it', async () => {
     const accountService = {
       findById: jest.fn().mockResolvedValue({ id: 'acc-1', status: 'ACTIVE' }),

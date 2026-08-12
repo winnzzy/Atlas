@@ -317,6 +317,13 @@ export class AdminManagementController {
     return this.orchestrationService.reverseTransaction(transactionId, reason ?? 'admin reversal');
   }
 
+  @Delete('transactions/:transactionId')
+  @ApiOperation({ summary: 'Delete a FAILED transaction (failed only; no ledger/balance impact)' })
+  deleteTransaction(@Headers('x-admin-role') role: AdminRole, @Param('transactionId') transactionId: string) {
+    this.policy.assertAllowed(role, 'transaction.manage');
+    return this.orchestrationService.deleteFailedTransaction(transactionId);
+  }
+
   @Get('transactions/ledger/:accountId')
   ledgerView(@Headers('x-admin-role') role: AdminRole, @Param('accountId') accountId: string) {
     this.policy.assertAllowed(role, 'transaction.manage');

@@ -61,10 +61,16 @@ export type TransferSummary = {
 
 export type CardSummary = {
   id?: string;
+  accountId?: string;
   name?: string;
   cardholderName?: string;
   maskedNumber?: string;
   last4?: string;
+  lastFour?: string;
+  network?: string;
+  type?: string;
+  expiryMonth?: number | string;
+  expiryYear?: number | string;
   status?: string;
   limit?: number | string;
   creditLimit?: number | string;
@@ -498,6 +504,12 @@ export async function getAdminTransfers(params: { limit?: number } = {}) {
 
 export async function getAdminTransactions(params: { limit?: number } = {}) {
   return requestJson<AdminPaged<Record<string, unknown>>>(`/api/v1/admin/transactions${query(params)}`);
+}
+
+export async function deleteAdminTransaction(transactionId: string) {
+  return requestJson<{ id: string; deleted: boolean }>(`/api/v1/admin/transactions/${transactionId}`, {
+    method: 'DELETE',
+  });
 }
 
 export async function getAdminAuditLogs(params: { limit?: number } = {}) {
