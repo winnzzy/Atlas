@@ -140,6 +140,41 @@ function parseBalance(value: unknown): number {
   return 0;
 }
 
+/**
+ * The backend serialises statuses/types as UPPERCASE enum values (e.g. COMPLETED,
+ * DEPOSIT). These map them to the Title-Case display buckets the dashboard renders.
+ * Comparing the raw value against Title-Case literals (the previous behaviour) made
+ * every posted transaction fall through to "Pending" and every credit to "Debit".
+ */
+function mapTransactionStatus(raw: unknown): DashboardTransaction['status'] {
+  switch (String(raw ?? '').toUpperCase()) {
+    case 'COMPLETED':
+    case 'SETTLED':
+    case 'POSTED':
+      return 'Completed';
+    case 'SCHEDULED':
+    case 'QUEUED':
+      return 'Scheduled';
+    default:
+      return 'Pending';
+  }
+}
+
+function mapTransactionDirection(rawType: unknown): DashboardTransaction['type'] {
+  return /DEPOSIT|CREDIT|INCOMING|INTEREST|REFUND/.test(String(rawType ?? '').toUpperCase())
+    ? 'Credit'
+    : 'Debit';
+}
+
+function mapTransferStatus(raw: unknown): DashboardTransfer['status'] {
+  const status = String(raw ?? '').toUpperCase();
+  if (status === 'COMPLETED') return 'Completed';
+  if (status === 'REJECTED' || status === 'FAILED' || status === 'CANCELLED' || status === 'REVERSED') {
+    return 'Rejected';
+  }
+  return 'Pending';
+}
+
 /** Resolves to null instead of rejecting, so one failing section cannot blank the dashboard. */
 async function settle<T>(promise: Promise<T>): Promise<T | null> {
   try {
@@ -176,9 +211,9 @@ export async function loadDashboardData() {
         reference: transaction.reference ?? transaction.id ?? 'TXN',
         description: transaction.description ?? transaction.memo ?? 'Transaction',
         amount: parseBalance(transaction.amount ?? transaction.amountValue),
-        status: (transaction.status === 'Completed' || transaction.status === 'Pending' || transaction.status === 'Scheduled' ? transaction.status : 'Pending') as 'Completed' | 'Pending' | 'Scheduled',
+        status: mapTransactionStatus(transaction.status),
         date: transaction.date ?? transaction.createdAt ?? '',
-        type: transaction.type === 'Credit' ? 'Credit' : 'Debit',
+        type: mapTransactionDirection(transaction.type),
       }))
     : [];
 
@@ -189,7 +224,7 @@ export async function loadDashboardData() {
         beneficiary: transfer.beneficiary ?? transfer.counterparty ?? 'Transfer',
         amount: parseBalance(transfer.amount),
         type: (transfer.type === 'Domestic' || transfer.type === 'International' || transfer.type === 'Same Day' ? transfer.type : 'Domestic') as 'Domestic' | 'International' | 'Same Day',
-        status: (transfer.status === 'Pending' || transfer.status === 'Completed' || transfer.status === 'Rejected' ? transfer.status : 'Pending') as 'Pending' | 'Completed' | 'Rejected',
+        status: mapTransferStatus(transfer.status),
         description: transfer.description ?? 'Transfer',
         date: transfer.date ?? transfer.createdAt ?? '',
       }))

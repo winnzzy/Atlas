@@ -300,8 +300,17 @@ function unwrapItems<T>(payload: unknown): T[] {
   if (Array.isArray(payload)) {
     return payload as T[];
   }
-  if (payload && typeof payload === 'object' && Array.isArray((payload as { items?: unknown }).items)) {
-    return (payload as { items: T[] }).items;
+  if (payload && typeof payload === 'object') {
+    const record = payload as { items?: unknown; data?: unknown };
+    if (Array.isArray(record.items)) {
+      return record.items as T[];
+    }
+    // GET /accounts paginates as { data, total, page, limit } rather than { items },
+    // so an accounts response would otherwise unwrap to [] — blanking the dashboard
+    // balance and blocking transfers ("no open account"). Accept both envelopes.
+    if (Array.isArray(record.data)) {
+      return record.data as T[];
+    }
   }
   return [];
 }
