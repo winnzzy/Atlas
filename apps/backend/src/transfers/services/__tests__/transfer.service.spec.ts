@@ -252,4 +252,47 @@ describe('TransferService', () => {
     );
     expect(transactionService.createTransaction).not.toHaveBeenCalled();
   });
+
+  // ── Split-brain guard ──────────────────────────────────────────────────────
+  // The transaction is the authoritative settlement engine. If it fails, the
+  // transfer MUST fail too — never blindly march to COMPLETED. This is the bug
+  // where the frontend showed "successful" while admin/ledger showed FAILED and
+  // the balance never moved.
+  it('fails the transfer when settlement fails — never reports a fake success', async () => {
+    const module = await buildModule({ kycStatus: 'APPROVED' });
+    const transactionService = module.get(TransactionService) as unknown as { createTransaction: jest.Mock };
+    transactionService.createTransaction.mockResolvedValue({
+      id: 'txn-fail',
+      reference: 'TXN-FAIL',
+      status: 'FAILED',
+      failureReason: 'Ledger posting failed',
+    });
+
+    const result = await module
+      .get(TransferService)
+      .createTransfer({ id: 'user-1' } as never, INTERNAL_DTO as never);
+
+    expect(result.status).toBe('FAILED');
+    expect(result.status).not.toBe('COMPLETED');
+    // The customer is told it could not be completed — no fake success.
+    expect(result.statusMessage).toMatch(/could not be completed/i);
+    // The internal ledger reason is never leaked to the customer.
+    expect(JSON.stringify(result)).not.toMatch(/ledger/i);
+  });
+
+  it('completes the transfer when settlement completes', async () => {
+    const module = await buildModule({ kycStatus: 'APPROVED' });
+    const transactionService = module.get(TransactionService) as unknown as { createTransaction: jest.Mock };
+    transactionService.createTransaction.mockResolvedValue({
+      id: 'txn-ok',
+      reference: 'TXN-OK',
+      status: 'COMPLETED',
+    });
+
+    const result = await module
+      .get(TransferService)
+      .createTransfer({ id: 'user-1' } as never, INTERNAL_DTO as never);
+
+    expect(result.status).toBe('COMPLETED');
+  });
 });

@@ -13,7 +13,7 @@ export type DashboardTransaction = {
   reference: string;
   description: string;
   amount: number;
-  status: 'Completed' | 'Pending' | 'Scheduled';
+  status: 'Completed' | 'Pending' | 'Scheduled' | 'Failed';
   date: string;
   type: 'Credit' | 'Debit';
 };
@@ -183,6 +183,16 @@ function mapTransactionStatus(raw: unknown): DashboardTransaction['status'] {
     case 'SCHEDULED':
     case 'QUEUED':
       return 'Scheduled';
+    // A failed/cancelled/reversed transaction must read as Failed — never fall
+    // through to "Pending", which would hide a failure from the customer while
+    // admin shows FAILED (the exact split-brain we are fixing).
+    case 'FAILED':
+    case 'CANCELLED':
+    case 'REVERSED':
+    case 'REJECTED':
+    case 'RETURNED':
+    case 'EXPIRED':
+      return 'Failed';
     default:
       return 'Pending';
   }

@@ -56,7 +56,15 @@ export default function TransactionsPage() {
                       {formatCurrency(Math.abs(transaction.amount))}
                     </Td>
                     <Td>
-                      <Badge variant={transaction.status === 'Completed' ? 'success' : 'warning'}>
+                      <Badge
+                        variant={
+                          transaction.status === 'Completed'
+                            ? 'success'
+                            : transaction.status === 'Failed'
+                              ? 'danger'
+                              : 'warning'
+                        }
+                      >
                         {transaction.status}
                       </Badge>
                     </Td>

@@ -179,14 +179,14 @@ export class TransactionRepository {
 
         await this.applyAccountDelta(tx, record.id, source.id, amount.negated());
         await this.applyAccountDelta(tx, record.id, destination.id, amount);
-        await this.createTransactionLine(tx, record.id, 'DEBIT', source.id, amount, `Transfer out ${record.reference}`);
-        await this.createTransactionLine(tx, record.id, 'CREDIT', destination.id, amount, `Transfer in ${record.reference}`);
+        await this.createTransactionLine(tx, record.id, 'DEBIT', source.accountNumber, amount, `Transfer out ${record.reference}`);
+        await this.createTransactionLine(tx, record.id, 'CREDIT', destination.accountNumber, amount, `Transfer in ${record.reference}`);
       } else if (DEBIT_TRANSACTION_TYPES.has(record.type as TransactionType)) {
         await this.applyAccountDelta(tx, record.id, source.id, amount.negated());
-        await this.createTransactionLine(tx, record.id, 'DEBIT', source.id, amount, record.description ?? record.type);
+        await this.createTransactionLine(tx, record.id, 'DEBIT', source.accountNumber, amount, record.description ?? record.type);
       } else if (CREDIT_TRANSACTION_TYPES.has(record.type as TransactionType) || record.type === TransactionType.ADJUSTMENT) {
         await this.applyAccountDelta(tx, record.id, source.id, amount);
-        await this.createTransactionLine(tx, record.id, 'CREDIT', source.id, amount, record.description ?? record.type);
+        await this.createTransactionLine(tx, record.id, 'CREDIT', source.accountNumber, amount, record.description ?? record.type);
       }
 
       await tx.transaction.update({
@@ -341,6 +341,9 @@ export class TransactionRepository {
     });
   }
 
+  // `accountCode` is TransactionLine.accountCode, a VARCHAR(20) column. Callers must
+  // pass the account NUMBER (<=20 chars), never the 36-char account UUID — a UUID
+  // overflows the column and rolls back the whole balance-mutation transaction.
   private async createTransactionLine(
     tx: Prisma.TransactionClient,
     transactionId: string,

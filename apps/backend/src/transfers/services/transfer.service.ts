@@ -5,6 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AccountService } from '../../accounts/services/account.service';
 import { TransactionService } from '../../transactions/services/transaction.service';
 import { TransactionType } from '../../transactions/enums/transaction-type.enum';
+import { TransactionStatus } from '../../transactions/enums/transaction-status.enum';
 import type { CreateTransactionDto } from '../../transactions/dto/create-transaction.dto';
 import { TransferMapper } from '../mappers/transfer.mapper';
 import { TransferPolicy } from '../policies/transfer.policy';
@@ -22,6 +23,7 @@ import {
   TransferCompletedEvent,
   TransferCreatedEvent,
   TransferEventType,
+  TransferFailedEvent,
   TransferReversedEvent,
   TransferSentEvent,
   TransferSettledEvent,
@@ -331,6 +333,16 @@ export class TransferService {
     // is no direct balance mutation here.
     const transaction = await this.transactionService.createTransaction({ ...this.toTransactionCreateDto(transfer), createdBy: user.id });
     transfer.settlementReference = transaction.reference;
+
+    // The transaction is the AUTHORITATIVE settlement engine. The transfer's
+    // terminal state must mirror it — we never blindly report success. If
+    // settlement failed (e.g. a ledger/balance error), the transfer fails too:
+    // no fake "COMPLETED", and no split-brain where the customer sees success
+    // while admin/ledger show a failed, un-debited transaction.
+    if (this.isFailedSettlement(transaction.status)) {
+      return this.failTransferFromSettlement(user, transfer, transaction);
+    }
+
     transfer.status = TransferStatus.PROCESSING;
     transfer.sentAt = new Date();
     await this.repository.updateTransfer(transfer);
@@ -538,6 +550,45 @@ export class TransferService {
       executed.push(await this.submitTransfer(user, transfer.id));
     }
     return executed;
+  }
+
+  /** A settlement is failed when the authoritative transaction reached a failure terminal state. */
+  private isFailedSettlement(status: string | undefined): boolean {
+    const value = String(status ?? TransactionStatus.COMPLETED).toUpperCase();
+    return (
+      value === TransactionStatus.FAILED ||
+      value === TransactionStatus.CANCELLED ||
+      value === TransactionStatus.REVERSED ||
+      value === TransactionStatus.EXPIRED
+    );
+  }
+
+  /**
+   * Settlement failed: mark the transfer FAILED so every surface agrees. No
+   * balance moved (the transaction rolled back its own ledger/balance work), so
+   * there is nothing to reverse here. The customer is told the transfer could not
+   * be completed — never a false success — without leaking internal detail.
+   */
+  private async failTransferFromSettlement(
+    user: AuthenticatedUser,
+    transfer: TransferRecord,
+    transaction: { reference?: string; status?: string; failureReason?: string },
+  ): Promise<TransferResponseDto> {
+    const reason = transaction.failureReason ?? `Settlement ${String(transaction.status ?? 'FAILED').toLowerCase()}`;
+    transfer.status = TransferStatus.FAILED;
+    transfer.failedAt = new Date();
+    transfer.failureReason = reason;
+    await this.repository.updateTransfer(transfer);
+    this.audit('FAILED', transfer, user.id, { settlementReference: transaction.reference ?? '', reason });
+    this.emit(
+      new TransferFailedEvent(transfer.id, transfer.sourceAccountId, { reason }),
+      TransferEventType.TRANSFER_FAILED,
+    );
+
+    const response = this.mapper.toTransferResponse(transfer);
+    response.statusMessage =
+      'Transfer could not be completed and no funds were moved. Please try again or contact customer support.';
+    return response;
   }
 
   private toTransactionCreateDto(transfer: TransferRecord): CreateTransactionDto {

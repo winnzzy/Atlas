@@ -144,11 +144,15 @@ export default function TransfersPage() {
         idempotencyKey: `web-${crypto.randomUUID()}`,
       });
 
-      // Report the status the backend actually assigned. If the backend supplied a
-      // specific customer message (e.g. a restricted account parked as pending),
-      // show that verbatim rather than a generic line.
-      const status = String(created?.status ?? 'PENDING');
-      if (created?.statusMessage) {
+      // Report the status the backend actually assigned. The backend is the single
+      // source of truth — we never show success unless it settled.
+      const status = String(created?.status ?? 'PENDING').toUpperCase();
+      const failed = ['FAILED', 'CANCELLED', 'REVERSED', 'RETURNED', 'EXPIRED', 'REJECTED'].includes(status);
+      if (failed) {
+        // A genuinely failed transfer. No funds moved. Surface it as an error —
+        // never a green "success" — using the backend's neutral message.
+        setError(created?.statusMessage ?? 'Transfer could not be completed. No funds were moved.');
+      } else if (created?.statusMessage) {
         // A parked/pending transfer (restricted account) — show the neutral
         // message plus how to reach support. The internal reason is never shown.
         setSuccess(created.statusMessage);
@@ -160,11 +164,11 @@ export default function TransfersPage() {
         if (isExternal && bankName) parts.push(`at ${bankName}`);
         const ref = created?.reference ? ` Reference: ${created.reference}.` : '';
         setSuccess(`${parts.join(' ')}. Status: completed.${ref}`);
+        setAmount('');
+        setMemo('');
       } else {
         setSuccess(`Transfer submitted. Current status: ${status.toLowerCase()}.`);
       }
-      setAmount('');
-      setMemo('');
       await refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Transfer failed');
