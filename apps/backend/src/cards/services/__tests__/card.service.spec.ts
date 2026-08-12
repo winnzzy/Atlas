@@ -82,7 +82,86 @@ describe('CardService', () => {
     await expect(service.freezeCard(user, application.id)).rejects.toThrow();
 
     const approved = await service.approveCardApplication(user, application.id, 'admin-1');
-    expect(approved.status).toBe(CardStatus.ISSUED);
+    expect(approved.status).toBe(CardStatus.ACTIVATED);
+  });
+
+  it('approves an application straight to an active, usable card with no dead-end state', async () => {
+    const accountService = {
+      findById: jest.fn().mockResolvedValue({ id: 'acc-1', status: 'ACTIVE' }),
+      isAccountHolder: jest.fn().mockResolvedValue(true),
+    };
+    const transactionService = { createTransaction: jest.fn() };
+    const ledgerService = { createHold: jest.fn(), releaseHold: jest.fn() };
+
+    const module = await Test.createTestingModule({
+      providers: [
+        CardService,
+        CardRepository,
+        { provide: PrismaService, useValue: createCardPrismaDouble() },
+        CardPolicy,
+        CardValidator,
+        CardMapper,
+        { provide: AccountService, useValue: accountService },
+        { provide: TransactionService, useValue: transactionService },
+        { provide: LedgerService, useValue: ledgerService },
+        { provide: EventEmitter2, useValue: { emit: jest.fn() } },
+      ],
+    }).compile();
+
+    const service = module.get(CardService);
+    const user = { id: 'user-1' } as never;
+
+    const application = await service.issueCard(
+      user,
+      { accountId: 'acc-1', type: CardType.PHYSICAL_DEBIT } as never,
+      { requiresApproval: true },
+    );
+    expect(application.status).toBe(CardStatus.REQUESTED);
+
+    const approved = await service.approveCardApplication(user, application.id, 'admin-1');
+    expect(approved.status).toBe(CardStatus.ACTIVATED);
+
+    // The customer sees the now-active card, and approval moved no money.
+    const owned = await service.searchCards(user, {} as never);
+    expect(owned.items.find((card) => card.id === application.id)?.status).toBe(CardStatus.ACTIVATED);
+    expect(transactionService.createTransaction).not.toHaveBeenCalled();
+    expect(ledgerService.createHold).not.toHaveBeenCalled();
+  });
+
+  it('approves a card already sitting in PENDING_VERIFICATION without an invalid-transition error', async () => {
+    const accountService = {
+      findById: jest.fn().mockResolvedValue({ id: 'acc-1', status: 'ACTIVE' }),
+      isAccountHolder: jest.fn().mockResolvedValue(true),
+    };
+
+    const module = await Test.createTestingModule({
+      providers: [
+        CardService,
+        CardRepository,
+        { provide: PrismaService, useValue: createCardPrismaDouble() },
+        CardPolicy,
+        CardValidator,
+        CardMapper,
+        { provide: AccountService, useValue: accountService },
+        { provide: TransactionService, useValue: { createTransaction: jest.fn() } },
+        { provide: LedgerService, useValue: { createHold: jest.fn(), releaseHold: jest.fn() } },
+        { provide: EventEmitter2, useValue: { emit: jest.fn() } },
+      ],
+    }).compile();
+
+    const service = module.get(CardService);
+    const admin = { id: 'admin-1' } as never;
+
+    // An admin-issued physical card lands in PENDING_VERIFICATION.
+    const issued = await service.issueCard(admin, {
+      accountId: 'acc-1',
+      type: CardType.PHYSICAL_DEBIT,
+    } as never);
+    expect(issued.status).toBe(CardStatus.PENDING_VERIFICATION);
+
+    // Approving it must advance it, not throw "cannot transition from PENDING_VERIFICATION".
+    const approved = await service.approveCardApplication(admin, issued.id, 'admin-1');
+    expect(approved.status).toBe(CardStatus.ACTIVATED);
   });
 
   it('rejects a card application and closes it', async () => {

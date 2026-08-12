@@ -210,14 +210,17 @@ export class CardService {
   }
 
   /**
-   * Approves a pending card application. Physical cards still need the
-   * verification step, so they land on PENDING_VERIFICATION rather than ISSUED.
+   * Approves a pending card application. Approval activates the card so the
+   * customer immediately has a usable card — there is no dead-end intermediate
+   * state. Both a fresh REQUESTED application and a card already sitting in
+   * PENDING_VERIFICATION (e.g. an admin-issued physical card) can be approved,
+   * so re-approving never raises an invalid-transition error.
    */
   async approveCardApplication(user: AuthenticatedUser, cardId: string, reviewerId: string): Promise<CardResponseDto> {
     const card = await this.findCardOrThrow(cardId);
-    this.ensureTransition(card, [CardStatus.REQUESTED]);
-    card.status =
-      card.type === CardType.PHYSICAL_DEBIT ? CardStatus.PENDING_VERIFICATION : CardStatus.ISSUED;
+    this.ensureTransition(card, [CardStatus.REQUESTED, CardStatus.PENDING_VERIFICATION]);
+    card.status = CardStatus.ACTIVATED;
+    card.activatedAt = new Date();
     card.updatedAt = new Date();
     await this.repository.updateCard(card);
     this.audit('APPROVE', card, reviewerId);

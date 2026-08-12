@@ -7,7 +7,15 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Table, Tbody, Td, Th, Thead, Tr } from '@/components/ui/table';
 import { loadDashboardData, type DashboardAccount, type DashboardTransfer } from '@/lib/api-data';
-import { createTransfer, searchBanks, type BankDirectoryEntry, type TransferType } from '@/lib/api';
+import {
+  createTransfer,
+  getPublicContact,
+  searchBanks,
+  type BankDirectoryEntry,
+  type PublicContact,
+  type TransferType,
+} from '@/lib/api';
+import { siteConfig } from '@/lib/site-config';
 
 const TRANSFER_TYPES: { value: TransferType; label: string; external: boolean }[] = [
   { value: 'INTERNAL', label: 'Between my accounts', external: false },
@@ -28,6 +36,10 @@ export default function TransfersPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ routing?: string; account?: string }>({});
+  // When a transfer is parked pending (restricted account), we surface the
+  // admin-configured support contact so the customer knows how to reach us.
+  const [showSupport, setShowSupport] = useState(false);
+  const [contact, setContact] = useState<PublicContact | null>(null);
 
   const [type, setType] = useState<TransferType>('INTERNAL');
   const [sourceAccountId, setSourceAccountId] = useState('');
@@ -51,6 +63,17 @@ export default function TransfersPage() {
       })
       .catch(() => setBanks([]));
   }, []);
+
+  // Load the admin-configured public contact once so a pending transfer can
+  // show real support details. Nothing is hardcoded here.
+  useEffect(() => {
+    void getPublicContact()
+      .then((result) => setContact(result))
+      .catch(() => setContact(null));
+  }, []);
+
+  const supportEmail = contact?.supportEmail ?? siteConfig.supportEmail;
+  const supportPhone = contact?.supportPhone ?? siteConfig.supportPhone;
 
   // Auto-fill the routing number when the typed bank matches a directory entry.
   const onBankNameChange = (value: string) => {
@@ -81,6 +104,7 @@ export default function TransfersPage() {
     event.preventDefault();
     setError(null);
     setSuccess(null);
+    setShowSupport(false);
     setFieldErrors({});
 
     // Client-side US banking-format validation. The backend re-validates these,
@@ -125,7 +149,10 @@ export default function TransfersPage() {
       // show that verbatim rather than a generic line.
       const status = String(created?.status ?? 'PENDING');
       if (created?.statusMessage) {
+        // A parked/pending transfer (restricted account) — show the neutral
+        // message plus how to reach support. The internal reason is never shown.
         setSuccess(created.statusMessage);
+        setShowSupport(true);
       } else if (status === 'COMPLETED') {
         const amountLabel = formatCurrency(Number(amount));
         const parts = [`Transfer submitted successfully — ${amountLabel}`];
@@ -298,6 +325,17 @@ export default function TransfersPage() {
                     <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700" role="status">
                       {success}
                     </p>
+                  ) : null}
+                  {showSupport ? (
+                    <div className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                      <p className="font-medium text-slate-900">Customer Support</p>
+                      <p>
+                        {supportEmail ?? 'Support email — not yet configured'}
+                      </p>
+                      <p>
+                        {supportPhone ?? 'Support phone — not yet configured'}
+                      </p>
+                    </div>
                   ) : null}
                   <Button type="submit" disabled={submitting || !sourceAccountId}>
                     {submitting ? 'Submitting…' : 'Submit transfer'}
