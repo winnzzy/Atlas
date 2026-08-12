@@ -213,6 +213,7 @@ export class AdminPresentationService {
     const periodStart = new Date(generatedAt);
     periodStart.setMonth(periodStart.getMonth() - months);
 
+    try {
     const result = await this.prisma.$transaction(
       async (tx) => {
       const { account } = await this.requireAccountForCustomer(tx, userId, dto.accountId);
@@ -375,6 +376,18 @@ export class AdminPresentationService {
         `${result.transactionCount} txns, closing ${result.finalBalance}`,
     );
     return result;
+    } catch (error) {
+      // Surface the exact production failure (Prisma error code + column/constraint
+      // meta) without leaking secrets. userId/accountId are identifiers, not secrets.
+      const err = error as { code?: string; meta?: unknown; message?: string; stack?: string };
+      this.logger.error(
+        `Presentation generation failed user=${userId} account=${dto.accountId} ` +
+          `code=${err?.code ?? 'n/a'} meta=${JSON.stringify(err?.meta ?? null)} ` +
+          `message=${err?.message ?? String(error)}`,
+        err?.stack,
+      );
+      throw error;
+    }
   }
 
   /**
