@@ -270,7 +270,15 @@ export class LedgerService implements LedgerRepository, EventBus {
   ): Promise<Money> {
     const existing = this.accountBalances.get(accountId.value);
     const currentBalance = existing?.balances.get(balanceType) ?? Money.zero(currency);
-    const newBalance = currentBalance.add(debits).subtract(credits);
+    // A ledger running balance is inherently signed (debits − credits): a net-credit
+    // account such as SYSTEM_CLEARING, or the credit leg of any journal, legitimately
+    // goes negative. Money's default constructor rejects negatives, so add()/subtract()
+    // would throw ("Money amount cannot be negative") and fail every posting. Compute
+    // the signed result directly and store it as signed money.
+    const newBalance = Money.fromSignedMinorUnits(
+      currentBalance.amount + debits.amount - credits.amount,
+      currency,
+    );
 
     if (existing) {
       existing.balances.set(balanceType, newBalance);
@@ -501,7 +509,12 @@ export class LedgerService implements LedgerRepository, EventBus {
         event.accountId.value,
         event.previousBalance.toDecimal(),
         event.newBalance.toDecimal(),
-        event.newBalance.subtract(event.previousBalance).toDecimal(),
+        // The change is a signed delta (new − previous) and may be negative; compute
+        // it as signed money so it never trips Money's non-negative guard.
+        Money.fromSignedMinorUnits(
+          event.newBalance.amount - event.previousBalance.amount,
+          event.newBalance.currency,
+        ).toDecimal(),
         'DEBIT',
       );
       this.eventEmitter.emit(LedgerEventType.BALANCE_CHANGED, nestEvent);
