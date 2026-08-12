@@ -72,7 +72,7 @@ export class TransferService {
   private async assertTransferEligibility(
     user: AuthenticatedUser,
     sourceAccount: { status: string },
-  ): Promise<void> {
+  ): Promise<{ restricted: boolean }> {
     const isAdminActor = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN';
 
     // ── KYC gate ──────────────────────────────────────────────────────────
@@ -89,20 +89,74 @@ export class TransferService {
     }
 
     // ── Account status / restriction gate ────────────────────────────────
-    // A restricted, frozen, locked, closed or dormant account cannot originate
-    // transfers. We return a clear, non-sensitive business message and never
-    // leak internal administrative notes.
+    // A restricted / frozen / locked account MAY submit the request, but it must
+    // NOT settle and must NOT debit any balance: it is parked in a pending state
+    // and the customer is told to contact support (see createRestrictedPendingTransfer).
+    // We never leak the internal administrative reason to the customer.
     const status = sourceAccount.status;
     if (status === 'RESTRICTED' || status === 'FROZEN' || status === 'LOCKED') {
-      throw new TransferPolicyViolationException(
-        'This account is currently restricted. Please contact customer support to complete this transaction.',
-      );
+      return { restricted: true };
     }
+    // Any other non-transactable status (closed, archived, dormant, …) is a hard reject.
     if (status !== 'ACTIVE' && status !== 'PENDING') {
       throw new TransferPolicyViolationException(
         `This account is not currently eligible for transfers (status: ${status}).`,
       );
     }
+    return { restricted: false };
+  }
+
+  /**
+   * A restricted/frozen/locked source account parks the transfer in a pending
+   * state instead of settling it. Critically, NO transaction is created and NO
+   * balance is debited — the money never moves. The customer receives a neutral
+   * "contact support" message; the real restriction reason stays internal
+   * (persisted on the record for admins, never mapped into the customer DTO).
+   */
+  private async createRestrictedPendingTransfer(
+    user: AuthenticatedUser,
+    dto: CreateTransferDto,
+    sourceAccount: { status: string },
+  ): Promise<TransferResponseDto> {
+    const now = new Date();
+    const record: TransferRecord = {
+      id: randomUUID(),
+      reference: dto.reference ?? this.generateReference(dto.type),
+      idempotencyKey: dto.idempotencyKey,
+      type: dto.type,
+      status: TransferStatus.PENDING_APPROVAL,
+      sourceAccountId: dto.sourceAccountId,
+      destinationAccountId: dto.destinationAccountId,
+      beneficiaryId: dto.beneficiaryId,
+      amount: dto.amount,
+      currency: dto.currency,
+      description: dto.description,
+      memo: dto.memo,
+      beneficiaryName: dto.beneficiaryName,
+      // Internal, admin-only note. The mapper never copies failureReason into the
+      // customer response, so this restriction detail is not disclosed to the customer.
+      failureReason: `Source account restricted (status: ${sourceAccount.status})`,
+      createdAt: now,
+      updatedAt: now,
+      metadata: dto.metadata,
+    };
+
+    await this.repository.saveTransfer(record);
+    this.audit('CREATED_PENDING_RESTRICTED', record, user.id, { status: sourceAccount.status });
+    this.emit(
+      new TransferCreatedEvent(record.id, record.sourceAccountId, {
+        type: record.type,
+        amount: record.amount,
+        currency: record.currency,
+        reference: record.reference,
+      }),
+      TransferEventType.TRANSFER_CREATED,
+    );
+
+    const response = this.mapper.toTransferResponse(record);
+    response.statusMessage =
+      'Transfer pending. Please contact customer support to complete this transaction.';
+    return response;
   }
 
   async createTransfer(user: AuthenticatedUser, dto: CreateTransferDto): Promise<TransferResponseDto> {
@@ -129,7 +183,13 @@ export class TransferService {
 
     // KYC + account-restriction gating happens here, server-side, before any
     // money moves and before the balance/policy checks below.
-    await this.assertTransferEligibility(user, sourceAccount);
+    const { restricted } = await this.assertTransferEligibility(user, sourceAccount);
+
+    // Restricted/frozen/locked accounts never settle: park the request as pending
+    // and return the support message without touching the ledger or balance.
+    if (restricted) {
+      return this.createRestrictedPendingTransfer(user, dto, sourceAccount);
+    }
 
     const beneficiary = dto.beneficiaryId ? await this.repository.findBeneficiaryById(dto.beneficiaryId) : null;
     const destinationAccount = dto.destinationAccountId ? await this.accountService.findById(dto.destinationAccountId) : null;

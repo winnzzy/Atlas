@@ -104,12 +104,16 @@ export default function TransfersPage() {
       });
 
       // Report the status the backend actually assigned. External rails are not
-      // connected, so those transfers stay pending until they are settled.
+      // connected, so those transfers stay pending until they are settled. If the
+      // backend supplied a specific customer message (e.g. a restricted account
+      // parked as pending), show that verbatim rather than a generic line.
       const status = String(created?.status ?? 'PENDING');
       setSuccess(
-        status === 'COMPLETED'
-          ? 'Transfer completed and posted to your account.'
-          : `Transfer submitted. Current status: ${status.toLowerCase()}.`,
+        created?.statusMessage
+          ? created.statusMessage
+          : status === 'COMPLETED'
+            ? 'Transfer completed and posted to your account.'
+            : `Transfer submitted. Current status: ${status.toLowerCase()}.`,
       );
       setAmount('');
       setMemo('');

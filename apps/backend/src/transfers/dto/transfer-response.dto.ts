@@ -15,6 +15,12 @@ export class TransferResponseDto {
   @ApiProperty({ enum: TransferStatus })
   status!: TransferStatus;
 
+  @ApiPropertyOptional({
+    description:
+      'Customer-facing status note (e.g. a pending transfer awaiting support). Never carries internal restriction reasons.',
+  })
+  statusMessage?: string;
+
   @ApiProperty()
   sourceAccountId!: string;
 

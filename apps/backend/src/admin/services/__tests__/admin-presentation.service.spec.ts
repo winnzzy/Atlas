@@ -129,6 +129,33 @@ describe('AdminPresentationService', () => {
     expect(snapshotSum.toFixed(2)).toBe('4700000.00');
   });
 
+  it('posts every generated transaction as COMPLETED and reconciles the balance (never leaves it at zero)', async () => {
+    const prisma = buildPrisma();
+    const service = makeService(prisma);
+
+    const result = await service.generate('user-1', { accountId: 'acc-1' });
+
+    // (2)/(9) Historical activity must be POSTED, never left PENDING.
+    expect(prisma.__state.transactions.length).toBeGreaterThan(20);
+    for (const txn of prisma.__state.transactions) {
+      expect(txn.status).toBe('COMPLETED');
+    }
+
+    // (3)(4)(5)(7) The account balance is the ledger accumulation, not zero.
+    const account = prisma.__state.account;
+    expect(new Decimal(account.currentBalance).toFixed(2)).toBe('4700000.00');
+    expect(new Decimal(account.availableBalance).toFixed(2)).toBe('4700000.00');
+    expect(new Decimal(account.currentBalance).toFixed(2)).not.toBe('0.00');
+    expect(result.finalBalance).toBe('4700000.00');
+
+    // (6)(8) Snapshots agree with the account balance to the cent.
+    const snapshotSum = prisma.__state.snapshots.reduce(
+      (acc: Decimal, s: Row) => acc.plus(new Decimal(s.changeAmount)),
+      new Decimal(0),
+    );
+    expect(snapshotSum.toFixed(2)).toBe(new Decimal(account.currentBalance).toFixed(2));
+  });
+
   it('writes the account number (not the UUID) as the ledger line account code', async () => {
     const prisma = buildPrisma();
     const service = makeService(prisma);

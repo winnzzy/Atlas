@@ -372,7 +372,7 @@ export type CreateTransferInput = {
 };
 
 export async function createTransfer(input: CreateTransferInput) {
-  return postJson<TransferSummary & { status?: string }>('/api/v1/transfers', input);
+  return postJson<TransferSummary & { status?: string; statusMessage?: string }>('/api/v1/transfers', input);
 }
 
 export type CardApplicationInput = {

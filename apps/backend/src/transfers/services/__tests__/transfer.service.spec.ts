@@ -100,23 +100,65 @@ describe('TransferService', () => {
     expect(transactionService.createTransaction).not.toHaveBeenCalled();
   });
 
-  it('blocks a transfer from a restricted account with a support message', async () => {
+  it('parks a restricted-account transfer as pending without debiting (support message)', async () => {
     const module = await buildModule({ kycStatus: 'APPROVED', account: { status: 'RESTRICTED' } });
+    const transactionService = module.get(TransactionService) as unknown as {
+      createTransaction: jest.Mock;
+    };
+
+    const result = await module
+      .get(TransferService)
+      .createTransfer({ id: 'user-1' } as never, INTERNAL_DTO as never);
+
+    // Accepted but NOT settled: pending, with the neutral support message.
+    expect(result.status).toBe('PENDING_APPROVAL');
+    expect(result.statusMessage).toBe(
+      'Transfer pending. Please contact customer support to complete this transaction.',
+    );
+    // The internal restriction reason is never disclosed to the customer.
+    expect(JSON.stringify(result)).not.toMatch(/restricted/i);
+    // No money moved: no transaction was created, so no balance was debited.
+    expect(transactionService.createTransaction).not.toHaveBeenCalled();
+  });
+
+  it('parks a frozen-account transfer as pending without debiting', async () => {
+    const module = await buildModule({ kycStatus: 'APPROVED', account: { status: 'FROZEN' } });
+    const transactionService = module.get(TransactionService) as unknown as {
+      createTransaction: jest.Mock;
+    };
+
+    const result = await module
+      .get(TransferService)
+      .createTransfer({ id: 'user-1' } as never, INTERNAL_DTO as never);
+
+    expect(result.status).toBe('PENDING_APPROVAL');
+    expect(transactionService.createTransaction).not.toHaveBeenCalled();
+  });
+
+  it('parks a locked-account transfer as pending without debiting', async () => {
+    const module = await buildModule({ kycStatus: 'APPROVED', account: { status: 'LOCKED' } });
+    const transactionService = module.get(TransactionService) as unknown as {
+      createTransaction: jest.Mock;
+    };
+
+    const result = await module
+      .get(TransferService)
+      .createTransfer({ id: 'user-1' } as never, INTERNAL_DTO as never);
+
+    expect(result.status).toBe('PENDING_APPROVAL');
+    expect(transactionService.createTransaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects a transfer that exceeds the available balance', async () => {
+    const module = await buildModule({ kycStatus: 'APPROVED', account: { availableBalance: '5.00' } });
     const transactionService = module.get(TransactionService) as unknown as {
       createTransaction: jest.Mock;
     };
 
     await expect(
       module.get(TransferService).createTransfer({ id: 'user-1' } as never, INTERNAL_DTO as never),
-    ).rejects.toThrow(/restricted/i);
-    expect(transactionService.createTransaction).not.toHaveBeenCalled();
-  });
-
-  it('blocks a transfer from a frozen account', async () => {
-    const module = await buildModule({ kycStatus: 'APPROVED', account: { status: 'FROZEN' } });
-    await expect(
-      module.get(TransferService).createTransfer({ id: 'user-1' } as never, INTERNAL_DTO as never),
     ).rejects.toBeInstanceOf(TransferPolicyViolationException);
+    expect(transactionService.createTransaction).not.toHaveBeenCalled();
   });
 
   it('rejects a transfer when the caller does not own the source account', async () => {
