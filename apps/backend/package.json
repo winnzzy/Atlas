@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "pnpm --filter @atlas/domain build && prisma generate --schema=prisma/schema.prisma && node scripts/apply-prisma-schema.js && nest build",
+    "build": "pnpm --filter @atlas/domain build && prisma generate --schema=prisma/schema.prisma && node scripts/apply-prisma-schema.js && node scripts/nest-build.js",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
