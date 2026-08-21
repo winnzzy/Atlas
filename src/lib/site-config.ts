@@ -1,14 +1,18 @@
 /**
  * Company / contact details for the public site.
  *
- * No real contact information, address, phone number, license, or regulatory
- * identifier exists in this project yet, so nothing is hardcoded here. Each
- * field reads from an environment variable and otherwise resolves to `null`.
- * The footer renders a clearly-marked "not yet configured" placeholder for any
- * null field rather than inventing a value.
+ * These are a last-resort fallback only. The live values configured by an
+ * admin (`src/app/admin/settings/page.tsx`, persisted through the backend's
+ * public-contact settings and served at `/api/v1/public/contact`) always take
+ * priority — see `getPublicContact()` in `src/lib/api.ts`. Every surface that
+ * displays contact info (the homepage footer, the Legal → Support & Contact
+ * page) reads the live value first and falls back to these env vars only when
+ * nothing has been configured yet.
  *
- * To go live, set the NEXT_PUBLIC_* variables in the deployment environment
- * with verified values.
+ * No real contact information exists in this project by default, so nothing
+ * is hardcoded here: each field reads from an environment variable and
+ * otherwise resolves to `null`, in which case the UI renders a clearly-marked
+ * "not yet configured" placeholder rather than inventing a value.
  */
 
 function env(value: string | undefined): string | null {
@@ -23,11 +27,6 @@ export const siteConfig = {
   supportEmail: env(process.env.NEXT_PUBLIC_SUPPORT_EMAIL),
   supportPhone: env(process.env.NEXT_PUBLIC_SUPPORT_PHONE),
   businessAddress: env(process.env.NEXT_PUBLIC_BUSINESS_ADDRESS),
-  // Regulatory / legal identifiers — null until a verified status exists.
-  // Do not populate these with anything unverified.
-  legalEntity: env(process.env.NEXT_PUBLIC_LEGAL_ENTITY),
-  licenseInfo: env(process.env.NEXT_PUBLIC_LICENSE_INFO),
-  depositInsuranceInfo: env(process.env.NEXT_PUBLIC_DEPOSIT_INSURANCE_INFO),
 };
 
 export type SiteConfig = typeof siteConfig;
