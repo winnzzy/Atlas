@@ -13,6 +13,7 @@ import {
 } from '../../exceptions/investment-domain.exception';
 import { DepositStatus, WithdrawalStatus } from '../../enums/investment-status.enum';
 import { TransactionService } from '../../../transactions/services/transaction.service';
+import { AccountRepository } from '../../../accounts/repositories/account.repository';
 
 describe('ApprovalService', () => {
   let service: ApprovalService;
@@ -21,6 +22,7 @@ describe('ApprovalService', () => {
   let _policy: jest.Mocked<InvestmentPolicy>;
   let eventEmitter: jest.Mocked<EventEmitter2>;
   let transactionService: jest.Mocked<TransactionService>;
+  let accountRepository: jest.Mocked<AccountRepository>;
 
   const mockProduct = {
     id: 'prod-1',
@@ -78,6 +80,9 @@ describe('ApprovalService', () => {
     const mockTransactionServiceObj = {
       createTransaction: jest.fn(),
     };
+    const mockAccountRepositoryObj = {
+      findByUserId: jest.fn().mockResolvedValue({ accounts: [{ id: 'acc-1' }], total: 1 }),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -87,6 +92,7 @@ describe('ApprovalService', () => {
         { provide: InvestmentPolicy, useValue: mockPolicyObj },
         { provide: EventEmitter2, useValue: mockEventEmitterObj },
         { provide: TransactionService, useValue: mockTransactionServiceObj },
+        { provide: AccountRepository, useValue: mockAccountRepositoryObj },
       ],
     }).compile();
 
@@ -96,6 +102,7 @@ describe('ApprovalService', () => {
     _policy = module.get(InvestmentPolicy) as jest.Mocked<InvestmentPolicy>;
     eventEmitter = module.get(EventEmitter2) as jest.Mocked<EventEmitter2>;
     transactionService = module.get(TransactionService) as jest.Mocked<TransactionService>;
+    accountRepository = module.get(AccountRepository) as jest.Mocked<AccountRepository>;
   });
 
   it('should be defined', () => {
@@ -124,7 +131,7 @@ describe('ApprovalService', () => {
       expect(transactionService.createTransaction).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'CRYPTO_DEPOSIT',
-          accountId: 'user-1',
+          accountId: 'acc-1',
           reference: 'DEP-ABC12345',
           metadata: expect.objectContaining({
             depositId: 'dep-1',
@@ -260,7 +267,7 @@ describe('ApprovalService', () => {
       expect(transactionService.createTransaction).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'CRYPTO_WITHDRAWAL',
-          accountId: 'user-1',
+          accountId: 'acc-1',
           reference: 'WTH-ABC12345',
           metadata: expect.objectContaining({
             withdrawalId: 'wth-1',
@@ -358,8 +365,9 @@ describe('ApprovalService', () => {
       expect(repository.upsertPosition).toHaveBeenCalledWith(
         expect.objectContaining({ quantity: 2, portfolioId: 'portfolio-1', productId: 'prod-1' }),
       );
+      expect(accountRepository.findByUserId).toHaveBeenCalledWith('user-1', { status: 'ACTIVE' });
       expect(transactionService.createTransaction).toHaveBeenCalledWith(
-        expect.objectContaining({ accountId: 'user-1' }),
+        expect.objectContaining({ accountId: 'acc-1' }),
       );
       // The transaction reads like an ordinary deposit — no admin-labeled text.
       const call = transactionService.createTransaction.mock.calls[0]?.[0] as {
@@ -395,6 +403,15 @@ describe('ApprovalService', () => {
       // Forcing it through is possible when explicitly requested.
       const forced = await service.adminAdjustBalance('user-1', 'BTC', 'DEBIT', 5, 'admin-1', true);
       expect(forced.newQuantity).toBe(0);
+    });
+
+    it('throws when the customer has no active account to post the transaction to', async () => {
+      repository.findPosition.mockResolvedValue(null);
+      accountRepository.findByUserId.mockResolvedValueOnce({ accounts: [], total: 0 } as never);
+
+      await expect(
+        service.adminAdjustBalance('user-1', 'BTC', 'CREDIT', 2, 'admin-1'),
+      ).rejects.toThrow('Customer has no active account to post this transaction to');
     });
 
     it('rejects a non-positive amount', async () => {

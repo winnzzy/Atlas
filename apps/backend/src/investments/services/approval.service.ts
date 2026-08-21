@@ -30,6 +30,7 @@ import { AssetStatus } from '../enums/investment-status.enum';
 import { AssetClass } from '../enums/asset-class.enum';
 import { TransactionService } from '../../transactions/services/transaction.service';
 import { TransactionType } from '../../transactions/enums/transaction-type.enum';
+import { AccountRepository } from '../../accounts/repositories/account.repository';
 
 /**
  * Admin balance adjustments (see {@link ApprovalService.adminAdjustBalance})
@@ -49,7 +50,23 @@ export class ApprovalService {
     private readonly policy: InvestmentPolicy,
     private readonly eventEmitter: EventEmitter2,
     private readonly transactionService: TransactionService,
+    private readonly accountRepository: AccountRepository,
   ) {}
+
+  /**
+   * Investment deposits/withdrawals post through the Transaction Engine the
+   * same way an ordinary transaction does, which requires a real bank
+   * account — never the raw user id. Resolves the customer's active
+   * account to post against.
+   */
+  private async resolveLedgerAccountId(userId: string): Promise<string> {
+    const { accounts } = await this.accountRepository.findByUserId(userId, { status: 'ACTIVE' });
+    const account = accounts[0];
+    if (!account) {
+      throw new BadRequestException('Customer has no active account to post this transaction to');
+    }
+    return account.id;
+  }
 
   /**
    * Admin approves a deposit. Creates transaction via Transaction Engine,
@@ -71,10 +88,12 @@ export class ApprovalService {
     const product = await this.repository.findProductById(deposit.productId);
     if (!product) throw new AssetNotFoundException(deposit.productId);
 
+    const accountId = await this.resolveLedgerAccountId(deposit.userId);
+
     // Create transaction through Transaction Engine (no accounting in Investments)
     const transaction = await this.transactionService.createTransaction({
       type: TransactionType.CRYPTO_DEPOSIT,
-      accountId: deposit.userId,
+      accountId,
       amount: String(deposit.amount),
       currency: 'USD',
       description: `Investment deposit: ${product.symbol} - ${deposit.reference}`,
@@ -232,10 +251,12 @@ export class ApprovalService {
     const product = await this.repository.findProductById(withdrawal.productId);
     if (!product) throw new AssetNotFoundException(withdrawal.productId);
 
+    const accountId = await this.resolveLedgerAccountId(withdrawal.userId);
+
     // Create transaction through Transaction Engine
     const transaction = await this.transactionService.createTransaction({
       type: TransactionType.CRYPTO_WITHDRAWAL,
-      accountId: withdrawal.userId,
+      accountId,
       amount: String(withdrawal.amount),
       currency: 'USD',
       description: `Investment withdrawal: ${product.symbol} - ${withdrawal.reference}`,
@@ -483,10 +504,12 @@ export class ApprovalService {
     );
     await this.repository.updatePortfolioValue(portfolio.id, totalValue);
 
+    const accountId = await this.resolveLedgerAccountId(userId);
+
     const transaction = await this.transactionService.createTransaction({
       type:
         direction === 'CREDIT' ? TransactionType.CRYPTO_DEPOSIT : TransactionType.CRYPTO_WITHDRAWAL,
-      accountId: userId,
+      accountId,
       amount: String(amount),
       currency: 'USD',
       description: `Investment ${direction === 'CREDIT' ? 'deposit' : 'withdrawal'}: ${product.symbol} - ${reference}`,

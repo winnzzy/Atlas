@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { TransactionsModule } from '../transactions/transactions.module';
+import { AccountsModule } from '../accounts/accounts.module';
 import { CommonModule } from '../common/common.module';
 
 // Repositories
@@ -31,11 +32,7 @@ import { InvestmentController } from './controllers/investment.controller';
 import { RolesGuard } from '../auth/guards/roles.guard';
 
 @Module({
-  imports: [
-    PrismaModule,
-    TransactionsModule,
-    CommonModule,
-  ],
+  imports: [PrismaModule, TransactionsModule, AccountsModule, CommonModule],
   controllers: [InvestmentController],
   providers: [
     RolesGuard,
