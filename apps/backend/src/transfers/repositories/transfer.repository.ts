@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { Prisma} from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import { TransferStatus as PrismaTransferStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -200,7 +200,9 @@ export class TransferRepository {
   async findByReference(reference: string): Promise<TransferRecord | null> {
     const ach = await this.prisma.achTransfer.findFirst({ where: { reference, deletedAt: null } });
     if (ach) return this.fromAch(ach);
-    const wire = await this.prisma.wireTransfer.findFirst({ where: { reference, deletedAt: null } });
+    const wire = await this.prisma.wireTransfer.findFirst({
+      where: { reference, deletedAt: null },
+    });
     return wire ? this.fromWire(wire) : null;
   }
 
@@ -209,10 +211,18 @@ export class TransferRepository {
     return result.items.find((item) => item.idempotencyKey === key) ?? null;
   }
 
-  async search(params: TransferSearchParams): Promise<{ items: TransferRecord[]; nextCursor?: string; totalCount: number }> {
+  async search(
+    params: TransferSearchParams,
+  ): Promise<{ items: TransferRecord[]; nextCursor?: string; totalCount: number }> {
     const [achRows, wireRows] = await Promise.all([
-      this.prisma.achTransfer.findMany({ where: { deletedAt: null }, orderBy: { createdAt: 'desc' } }),
-      this.prisma.wireTransfer.findMany({ where: { deletedAt: null }, orderBy: { createdAt: 'desc' } }),
+      this.prisma.achTransfer.findMany({
+        where: { deletedAt: null },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.wireTransfer.findMany({
+        where: { deletedAt: null },
+        orderBy: { createdAt: 'desc' },
+      }),
     ]);
 
     let items = [
@@ -223,11 +233,19 @@ export class TransferRepository {
     if (params.reference) items = items.filter((item) => item.reference === params.reference);
     if (params.status) items = items.filter((item) => item.status === params.status);
     if (params.type) items = items.filter((item) => item.type === params.type);
-    if (params.beneficiaryId) items = items.filter((item) => item.beneficiaryId === params.beneficiaryId);
-    if (params.accountId) items = items.filter((item) => item.sourceAccountId === params.accountId || item.destinationAccountId === params.accountId);
+    if (params.beneficiaryId)
+      items = items.filter((item) => item.beneficiaryId === params.beneficiaryId);
+    if (params.accountId)
+      items = items.filter(
+        (item) =>
+          item.sourceAccountId === params.accountId ||
+          item.destinationAccountId === params.accountId,
+      );
     if (params.currency) items = items.filter((item) => item.currency === params.currency);
-    if (params.minAmount) items = items.filter((item) => Number(item.amount) >= Number(params.minAmount));
-    if (params.maxAmount) items = items.filter((item) => Number(item.amount) <= Number(params.maxAmount));
+    if (params.minAmount)
+      items = items.filter((item) => Number(item.amount) >= Number(params.minAmount));
+    if (params.maxAmount)
+      items = items.filter((item) => Number(item.amount) <= Number(params.maxAmount));
     const { fromDate, toDate } = params;
     if (fromDate) items = items.filter((item) => item.createdAt >= fromDate);
     if (toDate) items = items.filter((item) => item.createdAt <= toDate);
@@ -240,7 +258,11 @@ export class TransferRepository {
     }
     const page = items.slice(0, params.limit);
     const lastItem = page.at(-1);
-    return { items: page, nextCursor: page.length === params.limit && lastItem ? lastItem.id : undefined, totalCount };
+    return {
+      items: page,
+      nextCursor: page.length === params.limit && lastItem ? lastItem.id : undefined,
+      totalCount,
+    };
   }
 
   async saveBeneficiary(record: BeneficiaryRecord): Promise<BeneficiaryRecord> {
@@ -285,7 +307,11 @@ export class TransferRepository {
     return row ? this.fromBeneficiary(row) : null;
   }
 
-  async searchBeneficiaries(userId: string, limit: number, cursor?: string): Promise<{ items: BeneficiaryRecord[]; nextCursor?: string; totalCount: number }> {
+  async searchBeneficiaries(
+    userId: string,
+    limit: number,
+    cursor?: string,
+  ): Promise<{ items: BeneficiaryRecord[]; nextCursor?: string; totalCount: number }> {
     const [rows, totalCount] = await Promise.all([
       this.prisma.beneficiary.findMany({
         where: { userId, deletedAt: null, isActive: true },
@@ -298,7 +324,11 @@ export class TransferRepository {
     ]);
     const items = rows.map((row) => this.fromBeneficiary(row));
     const lastItem = items.at(-1);
-    return { items, nextCursor: items.length === limit && lastItem ? lastItem.id : undefined, totalCount };
+    return {
+      items,
+      nextCursor: items.length === limit && lastItem ? lastItem.id : undefined,
+      totalCount,
+    };
   }
 
   async existsByReference(reference: string): Promise<boolean> {
@@ -309,14 +339,73 @@ export class TransferRepository {
     return (await this.findByIdempotencyKey(key)) !== null;
   }
 
+  /**
+   * Soft-delete a transfer so it disappears from every admin/customer view
+   * (all reads filter `deletedAt: null`). ACH and wire transfers live in
+   * separate tables, so — mirroring {@link findById} — this checks ACH first
+   * and falls back to wire. Never touches balances or the ledger.
+   */
+  async softDelete(id: string): Promise<void> {
+    const ach = await this.prisma.achTransfer.findFirst({ where: { id, deletedAt: null } });
+    if (ach) {
+      await this.prisma.achTransfer.update({ where: { id }, data: { deletedAt: new Date() } });
+      return;
+    }
+    const wire = await this.prisma.wireTransfer.findFirst({ where: { id, deletedAt: null } });
+    if (wire) {
+      await this.prisma.wireTransfer.update({ where: { id }, data: { deletedAt: new Date() } });
+    }
+  }
+
+  /** Soft-delete several transfers, spanning both ACH and wire tables, in one round trip. */
+  async softDeleteMany(ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+    await Promise.all([
+      this.prisma.achTransfer.updateMany({
+        where: { id: { in: ids }, deletedAt: null },
+        data: { deletedAt: new Date() },
+      }),
+      this.prisma.wireTransfer.updateMany({
+        where: { id: { in: ids }, deletedAt: null },
+        data: { deletedAt: new Date() },
+      }),
+    ]);
+  }
+
+  /**
+   * IDs of every non-deleted transfer this account itself initiated (the
+   * account's own outgoing history) — not transfers where it is only the
+   * destination. This mirrors `TransactionRepository#findIdsByAccount`, which
+   * clears only the initiating side's rows for the same reason: a transfer
+   * record is shared with its counterparty, so clearing "my history" must not
+   * reach into money movement that also belongs to another customer's account.
+   */
+  async findIdsByAccount(accountId: string): Promise<string[]> {
+    const [achRows, wireRows] = await Promise.all([
+      this.prisma.achTransfer.findMany({
+        where: { fromAccountId: accountId, deletedAt: null },
+        select: { id: true },
+      }),
+      this.prisma.wireTransfer.findMany({
+        where: { accountId, deletedAt: null },
+        select: { id: true },
+      }),
+    ]);
+    return [...achRows.map((row) => row.id), ...wireRows.map((row) => row.id)];
+  }
+
   private fromAch(row: AchTransferRow): TransferRecord {
     const metadata = this.metadata(row.metadata);
     return {
       id: row.id,
       reference: row.reference ?? undefined,
       idempotencyKey: this.asString(metadata.idempotencyKey),
-      type: (this.asString(metadata.domainType) ?? (row.toAccountId ? DomainTransferType.INTERNAL : DomainTransferType.ACH_CREDIT)) as TransferType,
-      status: (this.asString(metadata.domainStatus) ?? this.fromPrismaStatus(row.status)) as TransferStatus,
+      type: (this.asString(metadata.domainType) ??
+        (row.toAccountId
+          ? DomainTransferType.INTERNAL
+          : DomainTransferType.ACH_CREDIT)) as TransferType,
+      status: (this.asString(metadata.domainStatus) ??
+        this.fromPrismaStatus(row.status)) as TransferStatus,
       sourceAccountId: row.fromAccountId,
       destinationAccountId: row.toAccountId ?? undefined,
       beneficiaryId: this.asString(metadata.beneficiaryId),
@@ -353,7 +442,8 @@ export class TransferRepository {
       reference: row.reference ?? undefined,
       idempotencyKey: this.asString(metadata.idempotencyKey),
       type: (this.asString(metadata.domainType) ?? row.type) as TransferType,
-      status: (this.asString(metadata.domainStatus) ?? this.fromPrismaStatus(row.status)) as TransferStatus,
+      status: (this.asString(metadata.domainStatus) ??
+        this.fromPrismaStatus(row.status)) as TransferStatus,
       sourceAccountId: row.accountId,
       amount: new Decimal(row.amount).toFixed(2),
       currency: row.currency,
@@ -421,11 +511,17 @@ export class TransferRepository {
   }
 
   private toPrismaStatus(status: TransferStatus): PrismaTransferStatus {
-    if (status === DomainTransferStatus.COMPLETED || status === DomainTransferStatus.SETTLED) return PrismaTransferStatus.COMPLETED;
+    if (status === DomainTransferStatus.COMPLETED || status === DomainTransferStatus.SETTLED)
+      return PrismaTransferStatus.COMPLETED;
     if (status === DomainTransferStatus.FAILED) return PrismaTransferStatus.FAILED;
     if (status === DomainTransferStatus.CANCELLED) return PrismaTransferStatus.CANCELLED;
     if (status === DomainTransferStatus.RETURNED) return PrismaTransferStatus.RETURNED;
-    if (status === DomainTransferStatus.PROCESSING || status === DomainTransferStatus.SENT || status === DomainTransferStatus.PENDING_SETTLEMENT) return PrismaTransferStatus.PROCESSING;
+    if (
+      status === DomainTransferStatus.PROCESSING ||
+      status === DomainTransferStatus.SENT ||
+      status === DomainTransferStatus.PENDING_SETTLEMENT
+    )
+      return PrismaTransferStatus.PROCESSING;
     return PrismaTransferStatus.PENDING;
   }
 
@@ -439,11 +535,17 @@ export class TransferRepository {
   }
 
   private isWire(type: TransferType): boolean {
-    return [DomainTransferType.DOMESTIC_WIRE, DomainTransferType.INTERNATIONAL_WIRE, DomainTransferType.SWIFT].includes(type);
+    return [
+      DomainTransferType.DOMESTIC_WIRE,
+      DomainTransferType.INTERNATIONAL_WIRE,
+      DomainTransferType.SWIFT,
+    ].includes(type);
   }
 
   private metadata(value: unknown): TransferMetadata {
-    return value && typeof value === 'object' && !Array.isArray(value) ? value as TransferMetadata : {};
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as TransferMetadata)
+      : {};
   }
 
   private asString(value: unknown): string | undefined {

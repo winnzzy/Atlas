@@ -819,6 +819,25 @@ export class TransactionService {
   }
 
   /**
+   * Admin-only: delete the transaction settlement record linked to a transfer,
+   * looked up by the shared `reference` the transfer module stamps onto the
+   * transaction it creates at submission time (see TransferService#submitTransfer).
+   * Resolves to `null` with no error when no such transaction exists — a transfer
+   * that never settled (e.g. still pending, or parked for a restricted account)
+   * has none, and that is not a failure.
+   */
+  async adminDeleteTransactionByReference(
+    reference: string,
+    performedBy?: string,
+  ): Promise<{ id: string; deleted: boolean } | null> {
+    const transaction = await this.repository.findByReference(reference);
+    if (!transaction) {
+      return null;
+    }
+    return this.adminDeleteTransaction(transaction.id, performedBy);
+  }
+
+  /**
    * Admin-only: soft-delete a specific set of transactions in one call.
    * Unknown/already-deleted ids are silently skipped so a stale selection in
    * the admin UI never fails the whole batch.

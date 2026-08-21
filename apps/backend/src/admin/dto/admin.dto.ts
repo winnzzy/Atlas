@@ -225,6 +225,26 @@ export class BulkDeleteTransactionsDto {
   all?: boolean;
 }
 
+export class BulkDeleteTransfersDto {
+  @ApiPropertyOptional({ type: [String], description: 'Specific transfer ids to delete' })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  transferIds?: string[];
+
+  @ApiPropertyOptional({
+    description: 'Account whose entire transfer history should be cleared',
+  })
+  @IsOptional()
+  @IsUUID()
+  accountId?: string;
+
+  @ApiPropertyOptional({ description: 'Must be true together with accountId to clear all history' })
+  @IsOptional()
+  @IsBoolean()
+  all?: boolean;
+}
+
 export class GenerateHistoryDto {
   @ApiPropertyOptional({ description: 'History length in months (1-12), defaults to 6' })
   @IsOptional()

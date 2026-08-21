@@ -9,11 +9,13 @@ function buildPrisma(initial: Row = null) {
   return {
     systemSetting: {
       findUnique: jest.fn(async () => store.current),
-      upsert: jest.fn(async ({ create, update }: { create: { value: unknown }; update: { value: unknown } }) => {
-        const value = store.current ? update.value : create.value;
-        store.current = { key: 'public_contact', value };
-        return store.current;
-      }),
+      upsert: jest.fn(
+        async ({ create, update }: { create: { value: unknown }; update: { value: unknown } }) => {
+          const value = store.current ? update.value : create.value;
+          store.current = { key: 'public_contact', value };
+          return store.current;
+        },
+      ),
     },
     __store: store,
   };
@@ -23,9 +25,6 @@ const EMPTY = {
   supportEmail: null,
   supportPhone: null,
   businessAddress: null,
-  legalEntity: null,
-  licenseInfo: null,
-  depositInsuranceInfo: null,
 };
 
 describe('PublicContactService', () => {
@@ -49,7 +48,6 @@ describe('PublicContactService', () => {
     expect(saved.supportEmail).toBe('help@atlas.test');
     expect(saved.supportPhone).toBeNull();
     expect(saved.businessAddress).toBe('1 Main St');
-    expect(saved.legalEntity).toBeNull();
     expect(prisma.systemSetting.upsert).toHaveBeenCalledTimes(1);
 
     // A fresh read reflects the persisted document.

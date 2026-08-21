@@ -13,13 +13,6 @@ const CONTACT_FIELDS: { key: string; label: string; placeholder: string }[] = [
   { key: 'supportPhone', label: 'Support phone', placeholder: '+1 (555) 010-0000' },
   { key: 'supportEmail', label: 'Support email', placeholder: 'support@example.com' },
   { key: 'businessAddress', label: 'Business address', placeholder: 'Street, City, State ZIP' },
-  { key: 'legalEntity', label: 'Legal entity', placeholder: 'Registered legal entity name' },
-  { key: 'licenseInfo', label: 'Licensing information', placeholder: 'License / registration details' },
-  {
-    key: 'depositInsuranceInfo',
-    label: 'Deposit insurance / regulatory disclosure',
-    placeholder: 'Only enter verified regulatory information',
-  },
 ];
 
 export default function AdminSettingsPage() {
@@ -48,7 +41,12 @@ export default function AdminSettingsPage() {
     void getAdminPublicContact()
       .then((values) => {
         setContact(
-          Object.fromEntries(CONTACT_FIELDS.map(({ key }) => [key, (values as Record<string, string | null>)[key] ?? ''])),
+          Object.fromEntries(
+            CONTACT_FIELDS.map(({ key }) => [
+              key,
+              (values as Record<string, string | null>)[key] ?? '',
+            ]),
+          ),
         );
       })
       .catch(() => setContact({}));
@@ -64,7 +62,9 @@ export default function AdminSettingsPage() {
       );
       setContactNotice('Contact information updated successfully.');
     } catch (cause) {
-      setContactError(cause instanceof Error ? cause.message : 'Unable to save contact information');
+      setContactError(
+        cause instanceof Error ? cause.message : 'Unable to save contact information',
+      );
     } finally {
       setContactSaving(false);
     }
@@ -141,7 +141,10 @@ export default function AdminSettingsPage() {
                 </p>
               ) : null}
               {notice ? (
-                <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700" role="status">
+                <p
+                  className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700"
+                  role="status"
+                >
                   {notice}
                 </p>
               ) : null}
@@ -159,8 +162,8 @@ export default function AdminSettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-slate-500">
-              These values appear in the public site footer. Leave a field blank to show its
-              placeholder. Only enter verified legal or regulatory information.
+              These values appear in the public site footer and the Legal → Support &amp; Contact
+              page. Leave a field blank to show its placeholder.
             </p>
             <div className="grid gap-4 sm:grid-cols-2">
               {CONTACT_FIELDS.map(({ key, label, placeholder }) => (
@@ -183,7 +186,10 @@ export default function AdminSettingsPage() {
               </p>
             ) : null}
             {contactNotice ? (
-              <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700" role="status">
+              <p
+                className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700"
+                role="status"
+              >
                 {contactNotice}
               </p>
             ) : null}

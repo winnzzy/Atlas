@@ -5,14 +5,7 @@ import type { PublicContactDto, UpdatePublicContactDto } from './dto/public-cont
 
 const PUBLIC_CONTACT_KEY = 'public_contact';
 
-const CONTACT_FIELDS = [
-  'supportEmail',
-  'supportPhone',
-  'businessAddress',
-  'legalEntity',
-  'licenseInfo',
-  'depositInsuranceInfo',
-] as const;
+const CONTACT_FIELDS = ['supportEmail', 'supportPhone', 'businessAddress'] as const;
 
 /**
  * Persistent, admin-managed public contact/footer information.
@@ -32,7 +25,10 @@ export class PublicContactService {
     return this.normalize(row?.value);
   }
 
-  async updateContact(update: UpdatePublicContactDto, updatedBy?: string): Promise<PublicContactDto> {
+  async updateContact(
+    update: UpdatePublicContactDto,
+    updatedBy?: string,
+  ): Promise<PublicContactDto> {
     const next = await this.getContact();
     for (const field of CONTACT_FIELDS) {
       const value = update[field];

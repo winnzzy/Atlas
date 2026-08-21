@@ -434,9 +434,6 @@ export type PublicContact = {
   supportEmail: string | null;
   supportPhone: string | null;
   businessAddress: string | null;
-  legalEntity: string | null;
-  licenseInfo: string | null;
-  depositInsuranceInfo: string | null;
 };
 
 export async function getPublicContact() {
@@ -526,6 +523,23 @@ export async function bulkDeleteAdminTransactions(
 ) {
   return postJson<{ requested: number; deleted: number }>(
     `/api/v1/admin/customers/${userId}/transactions/bulk-delete`,
+    input,
+    'POST',
+  );
+}
+
+export async function deleteAdminTransfer(transferId: string) {
+  return requestJson<{ id: string; deleted: boolean }>(`/api/v1/admin/transfers/${transferId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function bulkDeleteAdminTransfers(
+  userId: string,
+  input: { transferIds?: string[] } | { accountId: string; all: true },
+) {
+  return postJson<{ requested: number; deleted: number }>(
+    `/api/v1/admin/customers/${userId}/transfers/bulk-delete`,
     input,
     'POST',
   );

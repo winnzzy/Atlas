@@ -9,11 +9,20 @@ import { TransactionStatus } from '../../transactions/enums/transaction-status.e
 import type { CreateTransactionDto } from '../../transactions/dto/create-transaction.dto';
 import { TransferMapper } from '../mappers/transfer.mapper';
 import { TransferPolicy } from '../policies/transfer.policy';
-import { TransferRepository, type TransferRecord, type BeneficiaryRecord } from '../repositories/transfer.repository';
+import {
+  TransferRepository,
+  type TransferRecord,
+  type BeneficiaryRecord,
+} from '../repositories/transfer.repository';
 import { TransferValidator } from '../validators/transfer.validator';
 import type { CreateBeneficiaryDto, CreateTransferDto } from '../dto/create-transfer.dto';
 import type { SearchTransfersDto } from '../dto/search-transfers.dto';
-import type { BeneficiaryResponseDto, TransferResponseDto, TransferSearchResponseDto, BeneficiarySearchResponseDto } from '../dto/transfer-response.dto';
+import type {
+  BeneficiaryResponseDto,
+  TransferResponseDto,
+  TransferSearchResponseDto,
+  BeneficiarySearchResponseDto,
+} from '../dto/transfer-response.dto';
 import { TransferStatus } from '../enums/transfer-status.enum';
 import { TransferType, TRANSFER_TO_TRANSACTION_TYPE } from '../enums/transfer-type.enum';
 import {
@@ -161,10 +170,15 @@ export class TransferService {
     return response;
   }
 
-  async createTransfer(user: AuthenticatedUser, dto: CreateTransferDto): Promise<TransferResponseDto> {
+  async createTransfer(
+    user: AuthenticatedUser,
+    dto: CreateTransferDto,
+  ): Promise<TransferResponseDto> {
     const isHolder = await this.accountService.isAccountHolder(dto.sourceAccountId, user.id);
     if (!isHolder && user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
-      throw new TransferPolicyViolationException('You do not have permission to transfer from this account');
+      throw new TransferPolicyViolationException(
+        'You do not have permission to transfer from this account',
+      );
     }
 
     if (dto.idempotencyKey) {
@@ -193,18 +207,25 @@ export class TransferService {
       return this.createRestrictedPendingTransfer(user, dto, sourceAccount);
     }
 
-    const beneficiary = dto.beneficiaryId ? await this.repository.findBeneficiaryById(dto.beneficiaryId) : null;
-    const destinationAccount = dto.destinationAccountId ? await this.accountService.findById(dto.destinationAccountId) : null;
+    const beneficiary = dto.beneficiaryId
+      ? await this.repository.findBeneficiaryById(dto.beneficiaryId)
+      : null;
+    const destinationAccount = dto.destinationAccountId
+      ? await this.accountService.findById(dto.destinationAccountId)
+      : null;
     if (dto.type === TransferType.INTERNAL && !destinationAccount) {
-      throw new TransferValidationException('Internal transfers require a valid destination Atlas account');
+      throw new TransferValidationException(
+        'Internal transfers require a valid destination Atlas account',
+      );
     }
 
     // Inline external destination: the customer typed the recipient bank details
     // directly (no saved beneficiary, no internal destination account).
     const isExternal = dto.type !== TransferType.INTERNAL;
-    const hasExternalDestination = isExternal && !beneficiary && !destinationAccount
-      ? Boolean(dto.beneficiaryName) && Boolean(dto.destinationAccountNumber)
-      : false;
+    const hasExternalDestination =
+      isExternal && !beneficiary && !destinationAccount
+        ? Boolean(dto.beneficiaryName) && Boolean(dto.destinationAccountNumber)
+        : false;
 
     // Validate the supplied US banking details with clear, field-level messages
     // before the policy runs, so the customer sees the precise problem.
@@ -235,14 +256,19 @@ export class TransferService {
     }
 
     if (isExternal && !beneficiary && !destinationAccount && !hasExternalDestination) {
-      throw new TransferValidationException('Non-internal transfers require a beneficiary or destination account');
+      throw new TransferValidationException(
+        'Non-internal transfers require a beneficiary or destination account',
+      );
     }
 
     if (dto.routingNumber && !this.validator.validateRoutingNumber(dto.routingNumber)) {
       throw new TransferValidationException('Routing number must be exactly 9 digits.');
     }
 
-    if (dto.destinationAccountNumber && !this.validator.validateAccountNumber(dto.destinationAccountNumber)) {
+    if (
+      dto.destinationAccountNumber &&
+      !this.validator.validateAccountNumber(dto.destinationAccountNumber)
+    ) {
       throw new TransferValidationException('Account number must contain 4–17 digits.');
     }
 
@@ -250,7 +276,11 @@ export class TransferService {
       throw new TransferValidationException('SWIFT/BIC code is invalid');
     }
 
-    if (dto.destinationCountry === 'US' && dto.routingNumber === undefined && (dto.type === TransferType.DOMESTIC_WIRE || dto.type === TransferType.SAME_DAY_ACH)) {
+    if (
+      dto.destinationCountry === 'US' &&
+      dto.routingNumber === undefined &&
+      (dto.type === TransferType.DOMESTIC_WIRE || dto.type === TransferType.SAME_DAY_ACH)
+    ) {
       throw new TransferValidationException('Domestic transfers require a routing number');
     }
 
@@ -284,14 +314,21 @@ export class TransferService {
     };
 
     await this.repository.saveTransfer(record);
-    this.audit('CREATED', record, user.id, { type: dto.type, amount: dto.amount, currency: dto.currency });
+    this.audit('CREATED', record, user.id, {
+      type: dto.type,
+      amount: dto.amount,
+      currency: dto.currency,
+    });
 
-    this.emit(new TransferCreatedEvent(record.id, record.sourceAccountId, {
-      type: record.type,
-      amount: record.amount,
-      currency: record.currency,
-      reference: record.reference,
-    }), TransferEventType.TRANSFER_CREATED);
+    this.emit(
+      new TransferCreatedEvent(record.id, record.sourceAccountId, {
+        type: record.type,
+        amount: record.amount,
+        currency: record.currency,
+        reference: record.reference,
+      }),
+      TransferEventType.TRANSFER_CREATED,
+    );
 
     if (!dto.scheduledAt) {
       return this.submitTransfer(user, record.id);
@@ -315,7 +352,8 @@ export class TransferService {
       beneficiaryId: transfer.beneficiaryId,
       // The transfer already passed full validation at creation; an external
       // transfer carries its destination inline (recipient name persisted).
-      hasExternalDestination: transfer.type !== TransferType.INTERNAL && Boolean(transfer.beneficiaryName),
+      hasExternalDestination:
+        transfer.type !== TransferType.INTERNAL && Boolean(transfer.beneficiaryName),
     });
     if (!policyResult.allowed) {
       throw new TransferPolicyViolationException(policyResult.violations.join('; '));
@@ -325,13 +363,21 @@ export class TransferService {
     transfer.submittedAt = new Date();
     await this.repository.updateTransfer(transfer);
     this.audit('SUBMITTED', transfer, user.id, {});
-    this.emit(new TransferSubmittedEvent(transfer.id, transfer.sourceAccountId, { reference: transfer.reference }), TransferEventType.TRANSFER_SUBMITTED);
+    this.emit(
+      new TransferSubmittedEvent(transfer.id, transfer.sourceAccountId, {
+        reference: transfer.reference,
+      }),
+      TransferEventType.TRANSFER_SUBMITTED,
+    );
 
     // Both internal and external transfers settle through the existing ledger
     // architecture (external rails are simulated — no real ACH/wire is sent). The
     // transaction type debits the source account so the balance decreases; there
     // is no direct balance mutation here.
-    const transaction = await this.transactionService.createTransaction({ ...this.toTransactionCreateDto(transfer), createdBy: user.id });
+    const transaction = await this.transactionService.createTransaction({
+      ...this.toTransactionCreateDto(transfer),
+      createdBy: user.id,
+    });
     transfer.settlementReference = transaction.reference;
 
     // The transaction is the AUTHORITATIVE settlement engine. The transfer's
@@ -346,18 +392,33 @@ export class TransferService {
     transfer.status = TransferStatus.PROCESSING;
     transfer.sentAt = new Date();
     await this.repository.updateTransfer(transfer);
-    this.emit(new TransferSentEvent(transfer.id, transfer.sourceAccountId, { settlementReference: transaction.reference }), TransferEventType.TRANSFER_SENT);
+    this.emit(
+      new TransferSentEvent(transfer.id, transfer.sourceAccountId, {
+        settlementReference: transaction.reference,
+      }),
+      TransferEventType.TRANSFER_SENT,
+    );
 
     transfer.status = TransferStatus.PENDING_SETTLEMENT;
     transfer.settlementAt = new Date();
     await this.repository.updateTransfer(transfer);
-    this.emit(new TransferSettledEvent(transfer.id, transfer.sourceAccountId, { settlementReference: transaction.reference }), TransferEventType.TRANSFER_SETTLED);
+    this.emit(
+      new TransferSettledEvent(transfer.id, transfer.sourceAccountId, {
+        settlementReference: transaction.reference,
+      }),
+      TransferEventType.TRANSFER_SETTLED,
+    );
 
     transfer.status = TransferStatus.COMPLETED;
     transfer.completedAt = new Date();
     await this.repository.updateTransfer(transfer);
     this.audit('COMPLETED', transfer, user.id, { settlementReference: transaction.reference });
-    this.emit(new TransferCompletedEvent(transfer.id, transfer.sourceAccountId, { status: transfer.status }), TransferEventType.TRANSFER_COMPLETED);
+    this.emit(
+      new TransferCompletedEvent(transfer.id, transfer.sourceAccountId, {
+        status: transfer.status,
+      }),
+      TransferEventType.TRANSFER_COMPLETED,
+    );
 
     return this.mapper.toTransferResponse(transfer);
   }
@@ -366,7 +427,10 @@ export class TransferService {
     return this.mapper.toTransferResponse(await this.requireTransfer(transferId));
   }
 
-  async getTransferForUser(user: AuthenticatedUser, transferId: string): Promise<TransferResponseDto> {
+  async getTransferForUser(
+    user: AuthenticatedUser,
+    transferId: string,
+  ): Promise<TransferResponseDto> {
     const transfer = await this.requireTransfer(transferId);
     await this.ensureTransferAccess(user, transfer);
     return this.mapper.toTransferResponse(transfer);
@@ -403,7 +467,9 @@ export class TransferService {
     if (dto.accountId) {
       const isHolder = await this.accountService.isAccountHolder(dto.accountId, user.id);
       if (!isHolder && user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN') {
-        throw new TransferPolicyViolationException('You do not have permission to view transfers for this account');
+        throw new TransferPolicyViolationException(
+          'You do not have permission to view transfers for this account',
+        );
       }
       return this.searchTransfers(dto);
     }
@@ -441,7 +507,11 @@ export class TransferService {
     };
   }
 
-  async cancelTransfer(user: AuthenticatedUser, transferId: string, reason: string): Promise<TransferResponseDto> {
+  async cancelTransfer(
+    user: AuthenticatedUser,
+    transferId: string,
+    reason: string,
+  ): Promise<TransferResponseDto> {
     const transfer = await this.requireTransfer(transferId);
     if (!this.policy.canCancel(transfer.status)) {
       throw new TransferValidationException(`Cannot cancel transfer in status ${transfer.status}`);
@@ -452,27 +522,48 @@ export class TransferService {
     transfer.failureReason = reason;
     await this.repository.updateTransfer(transfer);
     this.audit('CANCELLED', transfer, user.id, { reason });
-    this.emit(new TransferCancelledEvent(transfer.id, transfer.sourceAccountId, { reason }), TransferEventType.TRANSFER_CANCELLED);
+    this.emit(
+      new TransferCancelledEvent(transfer.id, transfer.sourceAccountId, { reason }),
+      TransferEventType.TRANSFER_CANCELLED,
+    );
     return this.mapper.toTransferResponse(transfer);
   }
 
-  async reverseTransfer(user: AuthenticatedUser, transferId: string, reason: string): Promise<TransferResponseDto> {
+  async reverseTransfer(
+    user: AuthenticatedUser,
+    transferId: string,
+    reason: string,
+  ): Promise<TransferResponseDto> {
     const transfer = await this.requireTransfer(transferId);
     if (!this.policy.canReverse(transfer.status)) {
       throw new TransferValidationException(`Cannot reverse transfer in status ${transfer.status}`);
     }
 
-    const reversalTransaction = await this.transactionService.createTransaction(this.toReversalTransactionCreateDto(transfer, reason));
+    const reversalTransaction = await this.transactionService.createTransaction(
+      this.toReversalTransactionCreateDto(transfer, reason),
+    );
     transfer.status = TransferStatus.REVERSED;
     transfer.reversedAt = new Date();
     transfer.reversalTransactionId = reversalTransaction.id;
     await this.repository.updateTransfer(transfer);
-    this.audit('REVERSED', transfer, user.id, { reason, reversalTransactionId: reversalTransaction.id });
-    this.emit(new TransferReversedEvent(transfer.id, transfer.sourceAccountId, { reason, reversalTransactionId: reversalTransaction.id }), TransferEventType.TRANSFER_REVERSED);
+    this.audit('REVERSED', transfer, user.id, {
+      reason,
+      reversalTransactionId: reversalTransaction.id,
+    });
+    this.emit(
+      new TransferReversedEvent(transfer.id, transfer.sourceAccountId, {
+        reason,
+        reversalTransactionId: reversalTransaction.id,
+      }),
+      TransferEventType.TRANSFER_REVERSED,
+    );
     return this.mapper.toTransferResponse(transfer);
   }
 
-  async createBeneficiary(user: AuthenticatedUser, dto: CreateBeneficiaryDto): Promise<BeneficiaryResponseDto> {
+  async createBeneficiary(
+    user: AuthenticatedUser,
+    dto: CreateBeneficiaryDto,
+  ): Promise<BeneficiaryResponseDto> {
     const beneficiary: BeneficiaryRecord = {
       id: randomUUID(),
       userId: user.id,
@@ -491,12 +582,22 @@ export class TransferService {
     };
 
     await this.repository.saveBeneficiary(beneficiary);
-    this.audit('BENEFICIARY_CREATED', undefined as never, user.id, { beneficiaryId: beneficiary.id, name: beneficiary.name });
-    this.emit(new BeneficiaryCreatedEvent(beneficiary.id, user.id), TransferEventType.BENEFICIARY_CREATED);
+    this.audit('BENEFICIARY_CREATED', undefined as never, user.id, {
+      beneficiaryId: beneficiary.id,
+      name: beneficiary.name,
+    });
+    this.emit(
+      new BeneficiaryCreatedEvent(beneficiary.id, user.id),
+      TransferEventType.BENEFICIARY_CREATED,
+    );
     return this.mapper.toBeneficiaryResponse(beneficiary);
   }
 
-  async updateBeneficiary(user: AuthenticatedUser, beneficiaryId: string, dto: CreateBeneficiaryDto): Promise<BeneficiaryResponseDto> {
+  async updateBeneficiary(
+    user: AuthenticatedUser,
+    beneficiaryId: string,
+    dto: CreateBeneficiaryDto,
+  ): Promise<BeneficiaryResponseDto> {
     const beneficiary = await this.requireBeneficiary(beneficiaryId);
     const updated = await this.repository.updateBeneficiary({
       ...beneficiary,
@@ -521,14 +622,27 @@ export class TransferService {
     this.audit('BENEFICIARY_DELETED', undefined as never, user.id, { beneficiaryId });
   }
 
-  async verifyBeneficiary(user: AuthenticatedUser, beneficiaryId: string): Promise<BeneficiaryResponseDto> {
+  async verifyBeneficiary(
+    user: AuthenticatedUser,
+    beneficiaryId: string,
+  ): Promise<BeneficiaryResponseDto> {
     const beneficiary = await this.requireBeneficiary(beneficiaryId);
-    const updated = await this.repository.updateBeneficiary({ ...beneficiary, verifiedAt: new Date() });
-    this.emit(new BeneficiaryVerifiedEvent(beneficiary.id, user.id), TransferEventType.BENEFICIARY_VERIFIED);
+    const updated = await this.repository.updateBeneficiary({
+      ...beneficiary,
+      verifiedAt: new Date(),
+    });
+    this.emit(
+      new BeneficiaryVerifiedEvent(beneficiary.id, user.id),
+      TransferEventType.BENEFICIARY_VERIFIED,
+    );
     return this.mapper.toBeneficiaryResponse(updated);
   }
 
-  async listBeneficiaries(user: AuthenticatedUser, limit = 20, cursor?: string): Promise<BeneficiarySearchResponseDto> {
+  async listBeneficiaries(
+    user: AuthenticatedUser,
+    limit = 20,
+    cursor?: string,
+  ): Promise<BeneficiarySearchResponseDto> {
     const result = await this.repository.searchBeneficiaries(user.id, limit, cursor);
     return {
       items: this.mapper.toBeneficiaryResponseArray(result.items),
@@ -537,10 +651,120 @@ export class TransferService {
     };
   }
 
-  async favoriteBeneficiary(user: AuthenticatedUser, beneficiaryId: string, favorite: boolean): Promise<BeneficiaryResponseDto> {
+  async favoriteBeneficiary(
+    user: AuthenticatedUser,
+    beneficiaryId: string,
+    favorite: boolean,
+  ): Promise<BeneficiaryResponseDto> {
     const beneficiary = await this.requireBeneficiary(beneficiaryId);
     const updated = await this.repository.updateBeneficiary({ ...beneficiary, favorite });
     return this.mapper.toBeneficiaryResponse(updated);
+  }
+
+  /**
+   * Admin-only: delete a transfer in any status from history. Always a soft
+   * delete — no balance, ledger, or snapshot is touched, so the account's
+   * money position is unaffected by the record disappearing from history.
+   * If the transfer settled, its linked Transaction row (sharing the same
+   * `reference` — see {@link submitTransfer}) is deleted too, by calling into
+   * TransactionService rather than reimplementing that logic here, so no
+   * orphaned transaction is left behind referencing a deleted transfer.
+   *
+   * This method must only ever be reached from an admin-authorized path — it
+   * is intentionally not wired to the customer-facing TransferController.
+   */
+  async adminDeleteTransfer(
+    transferId: string,
+    performedBy?: string,
+  ): Promise<{ id: string; deleted: boolean }> {
+    const transfer = await this.requireTransfer(transferId);
+    await this.repository.softDelete(transferId);
+
+    if (transfer.settlementReference) {
+      await this.transactionService.adminDeleteTransactionByReference(
+        transfer.settlementReference,
+        performedBy,
+      );
+    }
+
+    this.audit('ADMIN_DELETED', transfer, performedBy ?? 'admin', {
+      status: transfer.status,
+      reference: transfer.reference ?? '',
+    });
+
+    return { id: transferId, deleted: true };
+  }
+
+  /**
+   * Admin-only: soft-delete a specific set of transfers in one call. Unknown
+   * or already-deleted ids are silently skipped so a stale selection in the
+   * admin UI never fails the whole batch.
+   */
+  async adminBulkDeleteTransfers(
+    transferIds: string[],
+    performedBy?: string,
+  ): Promise<{ requested: number; deleted: number }> {
+    const unique = Array.from(new Set(transferIds)).filter(Boolean);
+    if (unique.length === 0) {
+      return { requested: 0, deleted: 0 };
+    }
+
+    const existing = await Promise.all(unique.map((id) => this.repository.findById(id)));
+    const found = existing.filter((row): row is TransferRecord => row !== null);
+
+    await this.repository.softDeleteMany(found.map((row) => row.id));
+
+    for (const transfer of found) {
+      if (transfer.settlementReference) {
+        await this.transactionService.adminDeleteTransactionByReference(
+          transfer.settlementReference,
+          performedBy,
+        );
+      }
+      this.audit('ADMIN_DELETED', transfer, performedBy ?? 'admin', {
+        status: transfer.status,
+        reference: transfer.reference ?? '',
+      });
+    }
+
+    return { requested: unique.length, deleted: found.length };
+  }
+
+  /**
+   * Admin-only: clear every transfer this account itself initiated (its own
+   * "clear all history" action) — see {@link TransferRepository#findIdsByAccount}
+   * for why only the initiating side's rows are removed. Soft delete only, and
+   * each transfer's linked transaction (if it settled) is deleted alongside it.
+   */
+  async adminClearAccountTransferHistory(
+    accountId: string,
+    performedBy?: string,
+  ): Promise<{ accountId: string; deleted: number }> {
+    const ids = await this.repository.findIdsByAccount(accountId);
+    if (ids.length === 0) {
+      return { accountId, deleted: 0 };
+    }
+
+    const records = await Promise.all(ids.map((id) => this.repository.findById(id)));
+    const found = records.filter((row): row is TransferRecord => row !== null);
+
+    await this.repository.softDeleteMany(ids);
+
+    for (const transfer of found) {
+      if (transfer.settlementReference) {
+        await this.transactionService.adminDeleteTransactionByReference(
+          transfer.settlementReference,
+          performedBy,
+        );
+      }
+    }
+
+    this.audit('ADMIN_CLEAR_HISTORY', undefined, performedBy ?? 'admin', {
+      accountId,
+      deletedCount: String(found.length),
+    });
+
+    return { accountId, deleted: found.length };
   }
 
   async executeQueuedTransfers(user: AuthenticatedUser): Promise<TransferResponseDto[]> {
@@ -574,12 +798,17 @@ export class TransferService {
     transfer: TransferRecord,
     transaction: { reference?: string; status?: string; failureReason?: string },
   ): Promise<TransferResponseDto> {
-    const reason = transaction.failureReason ?? `Settlement ${String(transaction.status ?? 'FAILED').toLowerCase()}`;
+    const reason =
+      transaction.failureReason ??
+      `Settlement ${String(transaction.status ?? 'FAILED').toLowerCase()}`;
     transfer.status = TransferStatus.FAILED;
     transfer.failedAt = new Date();
     transfer.failureReason = reason;
     await this.repository.updateTransfer(transfer);
-    this.audit('FAILED', transfer, user.id, { settlementReference: transaction.reference ?? '', reason });
+    this.audit('FAILED', transfer, user.id, {
+      settlementReference: transaction.reference ?? '',
+      reason,
+    });
     this.emit(
       new TransferFailedEvent(transfer.id, transfer.sourceAccountId, { reason }),
       TransferEventType.TRANSFER_FAILED,
@@ -613,7 +842,10 @@ export class TransferService {
     } as never;
   }
 
-  private toReversalTransactionCreateDto(transfer: TransferRecord, reason: string): CreateTransactionDto {
+  private toReversalTransactionCreateDto(
+    transfer: TransferRecord,
+    reason: string,
+  ): CreateTransactionDto {
     return {
       type: TransactionType.REVERSAL,
       accountId: transfer.sourceAccountId,
@@ -655,16 +887,24 @@ export class TransferService {
     return transfer;
   }
 
-  private async ensureTransferAccess(user: AuthenticatedUser, transfer: TransferRecord): Promise<void> {
+  private async ensureTransferAccess(
+    user: AuthenticatedUser,
+    transfer: TransferRecord,
+  ): Promise<void> {
     if (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') {
       return;
     }
-    const sourceHolder = await this.accountService.isAccountHolder(transfer.sourceAccountId, user.id);
+    const sourceHolder = await this.accountService.isAccountHolder(
+      transfer.sourceAccountId,
+      user.id,
+    );
     const destinationHolder = transfer.destinationAccountId
       ? await this.accountService.isAccountHolder(transfer.destinationAccountId, user.id)
       : false;
     if (!sourceHolder && !destinationHolder) {
-      throw new TransferPolicyViolationException('You do not have permission to view this transfer');
+      throw new TransferPolicyViolationException(
+        'You do not have permission to view this transfer',
+      );
     }
   }
 
@@ -674,7 +914,12 @@ export class TransferService {
     return beneficiary;
   }
 
-  private audit(action: string, transfer: TransferRecord | undefined, performedBy: string, details?: Record<string, string>): void {
+  private audit(
+    action: string,
+    transfer: TransferRecord | undefined,
+    performedBy: string,
+    details?: Record<string, string>,
+  ): void {
     this.auditLog.push({
       transferId: transfer?.id ?? 'N/A',
       action,

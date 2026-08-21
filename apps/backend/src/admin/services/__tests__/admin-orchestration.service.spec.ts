@@ -18,6 +18,13 @@ function buildService(overrides: Partial<Record<string, unknown>> = {}) {
     adminBulkDeleteTransactions: jest.fn().mockResolvedValue({ requested: 2, deleted: 2 }),
     adminClearAccountHistory: jest.fn().mockResolvedValue({ accountId: 'acc-1', deleted: 5 }),
   };
+  const transferService = {
+    adminDeleteTransfer: jest.fn().mockResolvedValue({ id: 'trf-1', deleted: true }),
+    adminBulkDeleteTransfers: jest.fn().mockResolvedValue({ requested: 2, deleted: 2 }),
+    adminClearAccountTransferHistory: jest
+      .fn()
+      .mockResolvedValue({ accountId: 'acc-1', deleted: 5 }),
+  };
   const approvalService = {
     adminAdjustBalance: jest.fn().mockResolvedValue({
       userId: 'customer-1',
@@ -33,6 +40,8 @@ function buildService(overrides: Partial<Record<string, unknown>> = {}) {
     adminAction: { create: jest.fn().mockResolvedValue({ id: 'action-1' }) },
     accountHolder: { findMany: jest.fn().mockResolvedValue([{ accountId: 'acc-1' }]) },
     transaction: { findMany: jest.fn().mockResolvedValue([{ id: 'txn-a' }, { id: 'txn-b' }]) },
+    achTransfer: { findMany: jest.fn().mockResolvedValue([{ id: 'trf-a' }]) },
+    wireTransfer: { findMany: jest.fn().mockResolvedValue([{ id: 'trf-b' }]) },
   };
 
   const service = new AdminOrchestrationService(
@@ -40,7 +49,7 @@ function buildService(overrides: Partial<Record<string, unknown>> = {}) {
     accountService as never,
     cardService as never,
     transactionService as never,
-    {} as never,
+    transferService as never,
     {} as never,
     {} as never,
     approvalService as never,
@@ -57,6 +66,7 @@ function buildService(overrides: Partial<Record<string, unknown>> = {}) {
     accountService,
     cardService,
     transactionService,
+    transferService,
     approvalService,
     prisma,
   };
@@ -278,6 +288,81 @@ describe('AdminOrchestrationService.bulkDeleteTransactions', () => {
   it('rejects an empty request', async () => {
     const { service } = buildService();
     await expect(service.bulkDeleteTransactions('admin-1', 'user-1', {})).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+});
+
+describe('AdminOrchestrationService.adminDeleteTransfer', () => {
+  it('delegates to TransferService and records the admin action', async () => {
+    const { service, transferService, prisma } = buildService();
+
+    const result = await service.adminDeleteTransfer('admin-1', 'trf-1');
+
+    expect(transferService.adminDeleteTransfer).toHaveBeenCalledWith('trf-1', 'admin-1');
+    expect(result).toEqual({ id: 'trf-1', deleted: true });
+    expect(prisma.adminAction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ adminUserId: 'admin-1', action: 'TRANSFER_DELETE' }),
+      }),
+    );
+  });
+});
+
+describe('AdminOrchestrationService.bulkDeleteTransfers', () => {
+  it("clears an account's entire transfer history when accountId + all are given", async () => {
+    const { service, transferService } = buildService();
+
+    const result = await service.bulkDeleteTransfers('admin-1', 'user-1', {
+      accountId: 'acc-1',
+      all: true,
+    });
+
+    expect(transferService.adminClearAccountTransferHistory).toHaveBeenCalledWith(
+      'acc-1',
+      'admin-1',
+    );
+    expect(result.deleted).toBe(5);
+  });
+
+  it('rejects clearing an account that does not belong to the customer', async () => {
+    const { service } = buildService();
+    await expect(
+      service.bulkDeleteTransfers('admin-1', 'user-1', { accountId: 'acc-other', all: true }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('deletes a specific set of owned transfer ids', async () => {
+    const { service, transferService, prisma } = buildService();
+    prisma.achTransfer.findMany.mockResolvedValue([{ id: 'trf-a' }]);
+    prisma.wireTransfer.findMany.mockResolvedValue([{ id: 'trf-b' }]);
+
+    const result = await service.bulkDeleteTransfers('admin-1', 'user-1', {
+      transferIds: ['trf-a', 'trf-b'],
+    });
+
+    expect(transferService.adminBulkDeleteTransfers).toHaveBeenCalledWith(
+      ['trf-a', 'trf-b'],
+      'admin-1',
+    );
+    expect(result.deleted).toBe(2);
+  });
+
+  it('rejects when a requested transfer id does not belong to the customer', async () => {
+    const { service, prisma } = buildService();
+    prisma.achTransfer.findMany.mockResolvedValue([{ id: 'trf-a' }]);
+    prisma.wireTransfer.findMany.mockResolvedValue([]);
+
+    await expect(
+      service.bulkDeleteTransfers('admin-1', 'user-1', {
+        transferIds: ['trf-a', 'trf-not-owned'],
+      }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('rejects an empty request', async () => {
+    const { service } = buildService();
+    await expect(service.bulkDeleteTransfers('admin-1', 'user-1', {})).rejects.toBeInstanceOf(
       BadRequestException,
     );
   });

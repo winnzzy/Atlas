@@ -15,6 +15,7 @@ import {
   applyAdminInvestmentAction,
   assignAdminAccount,
   bulkDeleteAdminTransactions,
+  bulkDeleteAdminTransfers,
   decideAdminKyc,
   generateAdminHistory,
   generateAdminPresentation,
@@ -186,6 +187,15 @@ export default function AdminCustomerDetailPage() {
     void run(
       () => bulkDeleteAdminTransactions(userId, { accountId, all: true }),
       'Transaction history cleared.',
+    );
+  };
+
+  const clearAccountTransferHistory = (accountId: string) => {
+    if (!window.confirm("Clear this account's entire transfer history? This cannot be undone."))
+      return;
+    void run(
+      () => bulkDeleteAdminTransfers(userId, { accountId, all: true }),
+      'Transfer history cleared.',
     );
   };
 
@@ -425,14 +435,24 @@ export default function AdminCustomerDetailPage() {
                         )}
                       </Td>
                       <Td>
-                        <Button
-                          variant="danger"
-                          className="px-2.5 py-1.5 text-xs"
-                          disabled={busy}
-                          onClick={() => clearAccountHistory(id)}
-                        >
-                          Clear history
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="danger"
+                            className="px-2.5 py-1.5 text-xs"
+                            disabled={busy}
+                            onClick={() => clearAccountHistory(id)}
+                          >
+                            Clear history
+                          </Button>
+                          <Button
+                            variant="danger"
+                            className="px-2.5 py-1.5 text-xs"
+                            disabled={busy}
+                            onClick={() => clearAccountTransferHistory(id)}
+                          >
+                            Clear transfers
+                          </Button>
+                        </div>
                       </Td>
                     </Tr>
                   );
