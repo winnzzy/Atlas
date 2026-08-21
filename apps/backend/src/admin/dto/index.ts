@@ -15,6 +15,7 @@ export {
   AdminSearchResultItemDto,
   AdminSettingsDto,
   BulkDeleteTransactionsDto,
+  BulkDeleteTransfersDto,
   CardAdminActionDto,
   CustomerQueryDto,
   CustomerStatusActionDto,

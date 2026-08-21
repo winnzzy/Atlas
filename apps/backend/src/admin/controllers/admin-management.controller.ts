@@ -19,6 +19,7 @@ import {
   AccountRestrictionDto,
   AssignAccountDto,
   BulkDeleteTransactionsDto,
+  BulkDeleteTransfersDto,
   CardAdminActionDto,
   CustomerQueryDto,
   CustomerStatusActionDto,
@@ -366,6 +367,33 @@ export class AdminManagementController {
   getSettlementView(@Headers('x-admin-role') role: AdminRole, @Query() query: SearchTransfersDto) {
     this.policy.assertAllowed(role, 'transfer.manage');
     return this.orchestrationService.getSettlementView(query);
+  }
+
+  @Post('customers/:userId/transfers/bulk-delete')
+  @ApiOperation({
+    summary: "Delete selected transfers, or clear an account's entire transfer history (audited)",
+  })
+  bulkDeleteTransfers(
+    @Headers('x-admin-role') role: AdminRole,
+    @Headers('x-admin-id') adminId: string,
+    @Param('userId') userId: string,
+    @Body() body: BulkDeleteTransfersDto,
+  ) {
+    this.policy.assertAllowed(role, 'transfer.manage');
+    return this.orchestrationService.bulkDeleteTransfers(adminId, userId, body);
+  }
+
+  @Delete('transfers/:transferId')
+  @ApiOperation({
+    summary: 'Delete a transfer in any status (admin-only; no ledger/balance impact)',
+  })
+  deleteTransfer(
+    @Headers('x-admin-role') role: AdminRole,
+    @Headers('x-admin-id') adminId: string,
+    @Param('transferId') transferId: string,
+  ) {
+    this.policy.assertAllowed(role, 'transfer.manage');
+    return this.orchestrationService.adminDeleteTransfer(adminId, transferId);
   }
 
   @Get('transactions')

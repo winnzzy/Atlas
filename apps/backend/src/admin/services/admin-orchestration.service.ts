@@ -25,6 +25,7 @@ import type { SearchTransfersDto } from '../../transfers/dto/search-transfers.dt
 import type {
   AccountAdminActionDto,
   BulkDeleteTransactionsDto,
+  BulkDeleteTransfersDto,
   CardAdminActionDto,
   CustomerQueryDto,
   CustomerStatusActionDto,
@@ -388,6 +389,81 @@ export class AdminOrchestrationService {
     }
 
     throw new BadRequestException('Provide either transactionIds, or accountId with all: true');
+  }
+
+  /** Admin-only: delete a transfer in any status (see Feature 1's transfer counterpart). */
+  async adminDeleteTransfer(
+    adminId: string,
+    transferId: string,
+  ): Promise<{ id: string; deleted: boolean }> {
+    const result = await this.transferService.adminDeleteTransfer(transferId, adminId);
+    await this.recordAction(adminId, 'TRANSFER_DELETE', 'TRANSFER', transferId, {});
+    return result;
+  }
+
+  /**
+   * `{ transferIds }` deletes exactly those transfers; `{ accountId, all: true }`
+   * clears every transfer that account initiated. Either way, ownership is
+   * verified against `userId` from the route so an admin operating on one
+   * customer's page cannot reach into another customer's records by id-guessing.
+   */
+  async bulkDeleteTransfers(
+    adminId: string,
+    userId: string,
+    dto: BulkDeleteTransfersDto,
+  ): Promise<{ requested: number; deleted: number }> {
+    const ownedAccountIds = (
+      await this.prisma.accountHolder.findMany({ where: { userId }, select: { accountId: true } })
+    ).map((holder) => holder.accountId);
+
+    if (dto.accountId && dto.all) {
+      if (!ownedAccountIds.includes(dto.accountId)) {
+        throw new NotFoundException('Account does not belong to this customer');
+      }
+
+      const result = await this.transferService.adminClearAccountTransferHistory(
+        dto.accountId,
+        adminId,
+      );
+      await this.recordAction(adminId, 'TRANSFER_CLEAR_HISTORY', 'ACCOUNT', dto.accountId, {
+        userId,
+        deletedCount: result.deleted,
+      });
+      return { requested: result.deleted, deleted: result.deleted };
+    }
+
+    if (dto.transferIds && dto.transferIds.length > 0) {
+      const [achOwned, wireOwned] = await Promise.all([
+        this.prisma.achTransfer.findMany({
+          where: {
+            id: { in: dto.transferIds },
+            OR: [
+              { fromAccountId: { in: ownedAccountIds } },
+              { toAccountId: { in: ownedAccountIds } },
+            ],
+          },
+          select: { id: true },
+        }),
+        this.prisma.wireTransfer.findMany({
+          where: { id: { in: dto.transferIds }, accountId: { in: ownedAccountIds } },
+          select: { id: true },
+        }),
+      ]);
+      const ownedIds = new Set([...achOwned, ...wireOwned].map((row) => row.id));
+      const rejected = dto.transferIds.filter((id: string) => !ownedIds.has(id));
+      if (rejected.length > 0) {
+        throw new NotFoundException('One or more transfers do not belong to this customer');
+      }
+
+      const result = await this.transferService.adminBulkDeleteTransfers(dto.transferIds, adminId);
+      await this.recordAction(adminId, 'TRANSFER_BULK_DELETE', 'USER', userId, {
+        transferIds: dto.transferIds,
+        deletedCount: result.deleted,
+      });
+      return result;
+    }
+
+    throw new BadRequestException('Provide either transferIds, or accountId with all: true');
   }
 
   async getLedgerView(accountId: string): Promise<unknown> {
