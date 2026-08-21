@@ -1,9 +1,34 @@
-import { Body, Controller, Delete, Get, Headers, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Headers,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { NotificationChannel, NotificationType } from '@prisma/client';
 import { SearchTransactionsDto } from '../../transactions/dto/search-transactions.dto';
 import { SearchTransfersDto } from '../../transfers/dto/search-transfers.dto';
-import { AccountAdminActionDto, AccountRestrictionDto, AssignAccountDto, CardAdminActionDto, CustomerQueryDto, CustomerStatusActionDto, GeneratePresentationDto, InvestmentAdminActionDto, KycDecisionDto, NotificationQueueQueryDto, UpdateCustomerDto } from '../dto';
+import {
+  AccountAdminActionDto,
+  AccountRestrictionDto,
+  AssignAccountDto,
+  BulkDeleteTransactionsDto,
+  CardAdminActionDto,
+  CustomerQueryDto,
+  CustomerStatusActionDto,
+  GenerateHistoryDto,
+  GeneratePresentationDto,
+  InvestmentAdminActionDto,
+  KycDecisionDto,
+  NotificationQueueQueryDto,
+  UpdateCustomerDto,
+} from '../dto';
 import type { AdminRole } from '../dto';
 import { AdminAuthGuard } from '../guards/admin-auth.guard';
 import { AdminPolicy } from '../policies/admin.policy';
@@ -48,7 +73,10 @@ export class AdminManagementController {
   }
 
   @Get('customers/:userId/investments')
-  getCustomerInvestments(@Headers('x-admin-role') role: AdminRole, @Param('userId') userId: string) {
+  getCustomerInvestments(
+    @Headers('x-admin-role') role: AdminRole,
+    @Param('userId') userId: string,
+  ) {
     this.policy.assertAllowed(role, 'customer.manage');
     return this.orchestrationService.getCustomerInvestments(userId);
   }
@@ -60,13 +88,19 @@ export class AdminManagementController {
   }
 
   @Get('customers/:userId/transactions')
-  getCustomerTransactions(@Headers('x-admin-role') role: AdminRole, @Param('userId') userId: string) {
+  getCustomerTransactions(
+    @Headers('x-admin-role') role: AdminRole,
+    @Param('userId') userId: string,
+  ) {
     this.policy.assertAllowed(role, 'customer.manage');
     return this.orchestrationService.getCustomerTransactions(userId);
   }
 
   @Get('customers/:userId/notifications')
-  getCustomerNotifications(@Headers('x-admin-role') role: AdminRole, @Param('userId') userId: string) {
+  getCustomerNotifications(
+    @Headers('x-admin-role') role: AdminRole,
+    @Param('userId') userId: string,
+  ) {
     this.policy.assertAllowed(role, 'customer.manage');
     return this.orchestrationService.getCustomerNotifications(userId);
   }
@@ -178,6 +212,36 @@ export class AdminManagementController {
     return this.customerService.generatePresentation(adminId, userId, body);
   }
 
+  @Post('customers/:userId/accounts/:accountId/generate-history')
+  @ApiOperation({
+    summary:
+      'Backfill additional realistic transaction history for an account (audited, balance-neutral)',
+  })
+  generateHistory(
+    @Headers('x-admin-role') role: AdminRole,
+    @Headers('x-admin-id') adminId: string,
+    @Param('userId') userId: string,
+    @Param('accountId') accountId: string,
+    @Body() body: GenerateHistoryDto,
+  ) {
+    this.policy.assertAllowed(role, 'transaction.manage');
+    return this.customerService.generateHistory(adminId, userId, accountId, body);
+  }
+
+  @Post('customers/:userId/transactions/bulk-delete')
+  @ApiOperation({
+    summary: "Delete selected transactions, or clear an account's entire history (audited)",
+  })
+  bulkDeleteTransactions(
+    @Headers('x-admin-role') role: AdminRole,
+    @Headers('x-admin-id') adminId: string,
+    @Param('userId') userId: string,
+    @Body() body: BulkDeleteTransactionsDto,
+  ) {
+    this.policy.assertAllowed(role, 'transaction.manage');
+    return this.orchestrationService.bulkDeleteTransactions(adminId, userId, body);
+  }
+
   @Patch('accounts/:accountId/restriction')
   @ApiOperation({ summary: 'Apply an account restriction/hold (audited)' })
   applyAccountRestriction(
@@ -204,11 +268,12 @@ export class AdminManagementController {
   @Patch('accounts/:accountId')
   applyAccountAction(
     @Headers('x-admin-role') role: AdminRole,
+    @Headers('x-admin-id') adminId: string,
     @Param('accountId') accountId: string,
     @Body() body: AccountAdminActionDto,
   ) {
     this.policy.assertAllowed(role, 'account.manage');
-    return this.orchestrationService.applyAccountAction(accountId, body);
+    return this.orchestrationService.applyAccountAction(accountId, body, adminId);
   }
 
   @Get('accounts/:accountId/statements')
@@ -231,11 +296,12 @@ export class AdminManagementController {
   @Patch('cards/:cardId')
   applyCardAction(
     @Headers('x-admin-role') role: AdminRole,
+    @Headers('x-admin-id') adminId: string,
     @Param('cardId') cardId: string,
     @Body() body: CardAdminActionDto,
   ) {
     this.policy.assertAllowed(role, 'card.manage');
-    return this.orchestrationService.applyCardAction(cardId, body);
+    return this.orchestrationService.applyCardAction(cardId, body, adminId);
   }
 
   @Get('investments/portfolio/:userId')
@@ -262,9 +328,13 @@ export class AdminManagementController {
   }
 
   @Patch('investments/actions')
-  applyInvestmentAction(@Headers('x-admin-role') role: AdminRole, @Body() body: InvestmentAdminActionDto) {
+  applyInvestmentAction(
+    @Headers('x-admin-role') role: AdminRole,
+    @Headers('x-admin-id') adminId: string,
+    @Body() body: InvestmentAdminActionDto,
+  ) {
     this.policy.assertAllowed(role, 'investment.manage');
-    return this.orchestrationService.applyInvestmentAction(body);
+    return this.orchestrationService.applyInvestmentAction(body, adminId);
   }
 
   @Get('transfers')
@@ -286,7 +356,10 @@ export class AdminManagementController {
     @Body('reason') reason: string,
   ) {
     this.policy.assertAllowed(role, 'transfer.manage');
-    return this.orchestrationService.cancelPendingTransfer(transferId, reason ?? 'admin cancellation');
+    return this.orchestrationService.cancelPendingTransfer(
+      transferId,
+      reason ?? 'admin cancellation',
+    );
   }
 
   @Get('transfers/settlement/view')
@@ -296,13 +369,19 @@ export class AdminManagementController {
   }
 
   @Get('transactions')
-  searchTransactions(@Headers('x-admin-role') role: AdminRole, @Query() query: SearchTransactionsDto) {
+  searchTransactions(
+    @Headers('x-admin-role') role: AdminRole,
+    @Query() query: SearchTransactionsDto,
+  ) {
     this.policy.assertAllowed(role, 'transaction.manage');
     return this.orchestrationService.searchTransactions(query);
   }
 
   @Get('transactions/reference/:reference')
-  getTransactionByReference(@Headers('x-admin-role') role: AdminRole, @Param('reference') reference: string) {
+  getTransactionByReference(
+    @Headers('x-admin-role') role: AdminRole,
+    @Param('reference') reference: string,
+  ) {
     this.policy.assertAllowed(role, 'transaction.manage');
     return this.orchestrationService.getTransactionByReference(reference);
   }
@@ -318,10 +397,16 @@ export class AdminManagementController {
   }
 
   @Delete('transactions/:transactionId')
-  @ApiOperation({ summary: 'Delete a FAILED transaction (failed only; no ledger/balance impact)' })
-  deleteTransaction(@Headers('x-admin-role') role: AdminRole, @Param('transactionId') transactionId: string) {
+  @ApiOperation({
+    summary: 'Delete a transaction in any status (admin-only; no ledger/balance impact)',
+  })
+  deleteTransaction(
+    @Headers('x-admin-role') role: AdminRole,
+    @Headers('x-admin-id') adminId: string,
+    @Param('transactionId') transactionId: string,
+  ) {
     this.policy.assertAllowed(role, 'transaction.manage');
-    return this.orchestrationService.deleteFailedTransaction(transactionId);
+    return this.orchestrationService.adminDeleteTransaction(adminId, transactionId);
   }
 
   @Get('transactions/ledger/:accountId')
@@ -338,13 +423,19 @@ export class AdminManagementController {
 
   @Get('notifications/queue')
   @ApiResponse({ status: 200, type: Object })
-  getNotificationQueue(@Headers('x-admin-role') role: AdminRole, @Query() query: NotificationQueueQueryDto) {
+  getNotificationQueue(
+    @Headers('x-admin-role') role: AdminRole,
+    @Query() query: NotificationQueueQueryDto,
+  ) {
     this.policy.assertAllowed(role, 'notification.manage');
     return this.orchestrationService.getNotificationQueue(query);
   }
 
   @Post('notifications/:notificationId/retry')
-  retryNotification(@Headers('x-admin-role') role: AdminRole, @Param('notificationId') notificationId: string) {
+  retryNotification(
+    @Headers('x-admin-role') role: AdminRole,
+    @Param('notificationId') notificationId: string,
+  ) {
     this.policy.assertAllowed(role, 'notification.manage');
     return this.orchestrationService.retryNotification(notificationId);
   }
@@ -358,7 +449,12 @@ export class AdminManagementController {
     @Body('variables') variables: Record<string, string | number | boolean | null> = {},
   ) {
     this.policy.assertAllowed(role, 'notification.manage');
-    return this.orchestrationService.previewNotificationTemplate(code, channel, language, variables);
+    return this.orchestrationService.previewNotificationTemplate(
+      code,
+      channel,
+      language,
+      variables,
+    );
   }
 
   @Post('notifications/broadcast')

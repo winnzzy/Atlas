@@ -371,11 +371,7 @@ function postJson<T>(path: string, body: unknown, method: 'POST' | 'PATCH' = 'PO
 // ── Customer mutations ────────────────────────────────────────────────────────
 
 export type TransferType =
-  | 'INTERNAL'
-  | 'ACH_CREDIT'
-  | 'SAME_DAY_ACH'
-  | 'DOMESTIC_WIRE'
-  | 'INTERNATIONAL_WIRE';
+  'INTERNAL' | 'ACH_CREDIT' | 'SAME_DAY_ACH' | 'DOMESTIC_WIRE' | 'INTERNATIONAL_WIRE';
 
 export type CreateTransferInput = {
   type: TransferType;
@@ -395,7 +391,10 @@ export type CreateTransferInput = {
 };
 
 export async function createTransfer(input: CreateTransferInput) {
-  return postJson<TransferSummary & { status?: string; statusMessage?: string }>('/api/v1/transfers', input);
+  return postJson<TransferSummary & { status?: string; statusMessage?: string }>(
+    '/api/v1/transfers',
+    input,
+  );
 }
 
 export type CardApplicationInput = {
@@ -487,7 +486,9 @@ export async function getAdminAnalytics() {
 }
 
 export async function getAdminCustomers(params: { q?: string; limit?: number } = {}) {
-  return requestJson<AdminPaged<Record<string, unknown>>>(`/api/v1/admin/customers${query(params)}`);
+  return requestJson<AdminPaged<Record<string, unknown>>>(
+    `/api/v1/admin/customers${query(params)}`,
+  );
 }
 
 export async function getAdminCustomerAccounts(userId: string) {
@@ -499,21 +500,41 @@ export async function getAdminCustomerCards(userId: string) {
 }
 
 export async function getAdminTransfers(params: { limit?: number } = {}) {
-  return requestJson<AdminPaged<Record<string, unknown>>>(`/api/v1/admin/transfers${query(params)}`);
+  return requestJson<AdminPaged<Record<string, unknown>>>(
+    `/api/v1/admin/transfers${query(params)}`,
+  );
 }
 
 export async function getAdminTransactions(params: { limit?: number } = {}) {
-  return requestJson<AdminPaged<Record<string, unknown>>>(`/api/v1/admin/transactions${query(params)}`);
+  return requestJson<AdminPaged<Record<string, unknown>>>(
+    `/api/v1/admin/transactions${query(params)}`,
+  );
 }
 
 export async function deleteAdminTransaction(transactionId: string) {
-  return requestJson<{ id: string; deleted: boolean }>(`/api/v1/admin/transactions/${transactionId}`, {
-    method: 'DELETE',
-  });
+  return requestJson<{ id: string; deleted: boolean }>(
+    `/api/v1/admin/transactions/${transactionId}`,
+    {
+      method: 'DELETE',
+    },
+  );
+}
+
+export async function bulkDeleteAdminTransactions(
+  userId: string,
+  input: { transactionIds?: string[] } | { accountId: string; all: true },
+) {
+  return postJson<{ requested: number; deleted: number }>(
+    `/api/v1/admin/customers/${userId}/transactions/bulk-delete`,
+    input,
+    'POST',
+  );
 }
 
 export async function getAdminAuditLogs(params: { limit?: number } = {}) {
-  return requestJson<AdminPaged<Record<string, unknown>>>(`/api/v1/admin/audit/logs${query(params)}`);
+  return requestJson<AdminPaged<Record<string, unknown>>>(
+    `/api/v1/admin/audit/logs${query(params)}`,
+  );
 }
 
 export async function getAdminReports(params: { limit?: number } = {}) {
@@ -541,6 +562,7 @@ export type AdminAccountAction = {
   reason?: string;
   amount?: string;
   reference?: string;
+  force?: boolean;
 };
 
 export async function applyAdminAccountAction(accountId: string, action: AdminAccountAction) {
@@ -562,7 +584,11 @@ export async function applyAdminCustomerAction(
   userId: string,
   action: { action: 'SUSPEND' | 'REACTIVATE' | 'FREEZE'; reason?: string },
 ) {
-  return postJson<Record<string, unknown>>(`/api/v1/admin/customers/${userId}/status`, action, 'PATCH');
+  return postJson<Record<string, unknown>>(
+    `/api/v1/admin/customers/${userId}/status`,
+    action,
+    'PATCH',
+  );
 }
 
 // ── Admin customer detail / KYC / accounts / restrictions ───────────────────
@@ -615,7 +641,11 @@ export async function assignAdminAccount(
   userId: string,
   input: { accountType: string; currency?: string; nickname?: string },
 ) {
-  return postJson<Record<string, unknown>>(`/api/v1/admin/customers/${userId}/accounts`, input, 'POST');
+  return postJson<Record<string, unknown>>(
+    `/api/v1/admin/customers/${userId}/accounts`,
+    input,
+    'POST',
+  );
 }
 
 export async function getAdminCustomerAudit(userId: string) {
@@ -626,7 +656,11 @@ export async function applyAdminAccountRestriction(
   accountId: string,
   input: { reason: string; restrictionType?: string; amount?: string; reference?: string },
 ) {
-  return postJson<Record<string, unknown>>(`/api/v1/admin/accounts/${accountId}/restriction`, input, 'PATCH');
+  return postJson<Record<string, unknown>>(
+    `/api/v1/admin/accounts/${accountId}/restriction`,
+    input,
+    'PATCH',
+  );
 }
 
 export async function releaseAdminAccountRestriction(accountId: string) {
@@ -685,10 +719,64 @@ export async function generateAdminPresentation(
   );
 }
 
+// ── Admin additional history generator (Feature 3) ──────────────────────────
+
+export type AdminGeneratedHistoryResult = {
+  accountId: string;
+  batchId: string;
+  transactionCount: number;
+  totalCredits: string;
+  totalDebits: string;
+  periodStart: string;
+  periodEnd: string;
+};
+
+export async function generateAdminHistory(
+  userId: string,
+  accountId: string,
+  input: { months?: number; totalAmount?: string; transactionCount?: number },
+) {
+  return postJson<AdminGeneratedHistoryResult>(
+    `/api/v1/admin/customers/${userId}/accounts/${accountId}/generate-history`,
+    input,
+    'POST',
+  );
+}
+
+// ── Admin investments ────────────────────────────────────────────────────────
+
+export type AdminInvestmentAction = {
+  action:
+    | 'APPROVE_DEPOSIT'
+    | 'APPROVE_WITHDRAWAL'
+    | 'UPDATE_PRICE'
+    | 'ENABLE_ASSET'
+    | 'DISABLE_ASSET'
+    | 'SUSPEND_ASSET'
+    | 'ADMIN_CREDIT'
+    | 'ADMIN_DEBIT';
+  id?: string;
+  symbol?: string;
+  price?: number;
+  userId?: string;
+  amount?: number;
+  reason?: string;
+  force?: boolean;
+};
+
+export async function applyAdminInvestmentAction(action: AdminInvestmentAction) {
+  return postJson<Record<string, unknown>>('/api/v1/admin/investments/actions', action, 'PATCH');
+}
+
 // ── Bank directory ──────────────────────────────────────────────────────────
 // `sandbox` is internal metadata (built-in default list vs a configured
 // provider); it is not surfaced in the customer UI.
-export type BankDirectoryEntry = { id: string; name: string; routingNumber: string; sandbox: boolean };
+export type BankDirectoryEntry = {
+  id: string;
+  name: string;
+  routingNumber: string;
+  sandbox: boolean;
+};
 
 export async function searchBanks(q?: string) {
   return requestJson<{ items: BankDirectoryEntry[]; sandbox: boolean }>(

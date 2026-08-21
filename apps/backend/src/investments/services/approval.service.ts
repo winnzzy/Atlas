@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/consistent-type-imports */
 import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InvestmentRepository } from '../repositories/investment.repository';
@@ -23,7 +22,11 @@ import {
   DepositNotFoundException,
   WithdrawalNotFoundException,
   AssetNotFoundException,
+  AssetDisabledException,
 } from '../exceptions/investment-domain.exception';
+import { BadRequestException } from '@nestjs/common';
+import { randomUUID } from 'crypto';
+import { AssetStatus } from '../enums/investment-status.enum';
 import { TransactionService } from '../../transactions/services/transaction.service';
 import { TransactionType } from '../../transactions/enums/transaction-type.enum';
 
@@ -43,7 +46,11 @@ export class ApprovalService {
    * Admin approves a deposit. Creates transaction via Transaction Engine,
    * posts to ledger, and updates portfolio holdings.
    */
-  async approveDeposit(depositId: string, approvedBy: string, _notes?: string): Promise<DepositResponseDto> {
+  async approveDeposit(
+    depositId: string,
+    approvedBy: string,
+    _notes?: string,
+  ): Promise<DepositResponseDto> {
     this.logger.log(`Approving deposit: ${depositId} by ${approvedBy}`);
 
     const deposit = await this.repository.findDepositById(depositId);
@@ -132,7 +139,10 @@ export class ApprovalService {
 
     // Update portfolio total value
     const positions = await this.repository.findPositionsByPortfolio(portfolio.id);
-    const totalValue = positions.reduce((sum: number, p: { currentValue: unknown }) => sum + Number(p.currentValue), 0);
+    const totalValue = positions.reduce(
+      (sum: number, p: { currentValue: unknown }) => sum + Number(p.currentValue),
+      0,
+    );
     await this.repository.updatePortfolioValue(portfolio.id, totalValue);
 
     this.eventEmitter.emit(
@@ -158,7 +168,11 @@ export class ApprovalService {
   /**
    * Admin rejects a deposit.
    */
-  async rejectDeposit(depositId: string, rejectedBy: string, reason: string): Promise<DepositResponseDto> {
+  async rejectDeposit(
+    depositId: string,
+    rejectedBy: string,
+    reason: string,
+  ): Promise<DepositResponseDto> {
     this.logger.log(`Rejecting deposit: ${depositId} by ${rejectedBy}`);
 
     const deposit = await this.repository.findDepositById(depositId);
@@ -176,7 +190,13 @@ export class ApprovalService {
 
     this.eventEmitter.emit(
       InvestmentEventType.DEPOSIT_REJECTED,
-      new InvestmentDepositRejectedEvent(depositId, deposit.userId, deposit.productId, reason, rejectedBy),
+      new InvestmentDepositRejectedEvent(
+        depositId,
+        deposit.userId,
+        deposit.productId,
+        reason,
+        rejectedBy,
+      ),
     );
 
     this.logger.log(`Deposit rejected: ${depositId}`);
@@ -268,7 +288,10 @@ export class ApprovalService {
 
     // Update portfolio total value
     const positions = await this.repository.findPositionsByPortfolio(portfolio.id);
-    const totalValue = positions.reduce((sum: number, p: { currentValue: unknown }) => sum + Number(p.currentValue), 0);
+    const totalValue = positions.reduce(
+      (sum: number, p: { currentValue: unknown }) => sum + Number(p.currentValue),
+      0,
+    );
     await this.repository.updatePortfolioValue(portfolio.id, totalValue);
 
     this.eventEmitter.emit(
@@ -284,7 +307,13 @@ export class ApprovalService {
 
     this.eventEmitter.emit(
       InvestmentEventType.PORTFOLIO_UPDATED,
-      new PortfolioUpdatedEvent(withdrawal.userId, withdrawal.productId, quantity, 'withdrawal', approvedBy),
+      new PortfolioUpdatedEvent(
+        withdrawal.userId,
+        withdrawal.productId,
+        quantity,
+        'withdrawal',
+        approvedBy,
+      ),
     );
 
     this.logger.log(`Withdrawal approved: ${withdrawalId}, transaction: ${transaction.id}`);
@@ -316,10 +345,151 @@ export class ApprovalService {
 
     this.eventEmitter.emit(
       InvestmentEventType.WITHDRAWAL_REJECTED,
-      new InvestmentWithdrawalRejectedEvent(withdrawalId, withdrawal.userId, withdrawal.productId, reason, rejectedBy),
+      new InvestmentWithdrawalRejectedEvent(
+        withdrawalId,
+        withdrawal.userId,
+        withdrawal.productId,
+        reason,
+        rejectedBy,
+      ),
     );
 
     this.logger.log(`Withdrawal rejected: ${withdrawalId}`);
     return this.mapper.toWithdrawalResponseDto(updatedWithdrawal);
+  }
+
+  /**
+   * Admin-only direct adjustment of a customer's holding for one asset — no
+   * pending deposit/withdrawal request required. It updates the position and
+   * writes a portfolio entry and a Transaction Engine record the exact same
+   * way {@link approveDeposit}/{@link approveWithdrawal} do, so from the
+   * customer's side it reads as an ordinary deposit or withdrawal: same
+   * holding movement, same portfolio transaction list entry, same transaction
+   * history entry. The admin's real reason is written to the caller's audit
+   * trail only (see AdminOrchestrationService) — nothing here is admin-labeled.
+   */
+  async adminAdjustBalance(
+    userId: string,
+    productSymbol: string,
+    direction: 'CREDIT' | 'DEBIT',
+    amount: number,
+    performedBy: string,
+    force = false,
+  ): Promise<{
+    userId: string;
+    productSymbol: string;
+    direction: 'CREDIT' | 'DEBIT';
+    amount: number;
+    newQuantity: number;
+    reference: string;
+    transactionId: string;
+  }> {
+    if (!(amount > 0)) {
+      throw new BadRequestException('Amount must be a positive number');
+    }
+
+    const product = await this.repository.findProductBySymbol(productSymbol);
+    if (!product) {
+      throw new AssetNotFoundException(productSymbol);
+    }
+    if (product.status !== AssetStatus.ACTIVE) {
+      throw new AssetDisabledException(productSymbol);
+    }
+
+    const portfolio = await this.repository.findOrCreatePortfolio(userId);
+    const existingPosition = await this.repository.findPosition(portfolio.id, product.id);
+    const pricePerUnit = product.priceHistory?.[0] ? Number(product.priceHistory[0].price) : 0;
+    const existingQuantity = existingPosition ? Number(existingPosition.quantity) : 0;
+
+    if (direction === 'DEBIT' && !force && amount > existingQuantity) {
+      throw new BadRequestException(
+        "Amount exceeds the customer's current holding for this asset. Pass force to override.",
+      );
+    }
+
+    const reference = `${direction === 'CREDIT' ? 'DEP' : 'WD'}-${randomUUID().slice(0, 8).toUpperCase()}`;
+    const newQuantity =
+      direction === 'CREDIT' ? existingQuantity + amount : Math.max(0, existingQuantity - amount);
+    const totalCost =
+      direction === 'CREDIT'
+        ? Number(existingPosition?.totalCost ?? 0) + amount * pricePerUnit
+        : newQuantity * Number(existingPosition?.averageCost ?? pricePerUnit);
+    const averageCost = newQuantity > 0 ? totalCost / newQuantity : 0;
+    const currentValue = newQuantity * pricePerUnit;
+
+    await this.repository.upsertPosition({
+      portfolioId: portfolio.id,
+      productId: product.id,
+      quantity: newQuantity,
+      averageCost,
+      totalCost,
+      currentValue,
+      profitLoss: currentValue - totalCost,
+      profitLossPct: totalCost > 0 ? ((currentValue - totalCost) / totalCost) * 100 : 0,
+    });
+
+    await this.repository.createEntry({
+      portfolioId: portfolio.id,
+      productId: product.id,
+      type:
+        direction === 'CREDIT'
+          ? PortfolioTransactionType.DEPOSIT
+          : PortfolioTransactionType.WITHDRAWAL,
+      quantity: amount,
+      pricePerUnit,
+      totalAmount: amount * pricePerUnit,
+      reference,
+      description:
+        direction === 'CREDIT' ? `Deposit: ${product.symbol}` : `Withdrawal: ${product.symbol}`,
+      createdBy: performedBy,
+    });
+
+    const positions = await this.repository.findPositionsByPortfolio(portfolio.id);
+    const totalValue = positions.reduce(
+      (sum: number, p: { currentValue: unknown }) => sum + Number(p.currentValue),
+      0,
+    );
+    await this.repository.updatePortfolioValue(portfolio.id, totalValue);
+
+    const transaction = await this.transactionService.createTransaction({
+      type:
+        direction === 'CREDIT' ? TransactionType.CRYPTO_DEPOSIT : TransactionType.CRYPTO_WITHDRAWAL,
+      accountId: userId,
+      amount: String(amount),
+      currency: 'USD',
+      description: `Investment ${direction === 'CREDIT' ? 'deposit' : 'withdrawal'}: ${product.symbol} - ${reference}`,
+      reference,
+      metadata: {
+        investmentType: 'CRYPTO',
+        productSymbol: product.symbol,
+        productId: product.id,
+      },
+      createdBy: performedBy,
+    });
+
+    this.eventEmitter.emit(
+      InvestmentEventType.PORTFOLIO_UPDATED,
+      new PortfolioUpdatedEvent(
+        userId,
+        product.id,
+        amount,
+        direction === 'CREDIT' ? 'deposit' : 'withdrawal',
+        performedBy,
+      ),
+    );
+
+    this.logger.log(
+      `Admin ${direction} of ${amount} ${product.symbol} for user ${userId}, transaction: ${transaction.id}`,
+    );
+
+    return {
+      userId,
+      productSymbol: product.symbol,
+      direction,
+      amount,
+      newQuantity,
+      reference,
+      transactionId: transaction.id,
+    };
   }
 }

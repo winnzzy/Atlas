@@ -9,7 +9,11 @@ import { Select } from '@/components/ui/select';
 import { Table, Tbody, Td, Th, Thead, Tr } from '@/components/ui/table';
 import { AdminState, useAdminResource } from '@/components/admin/admin-panel';
 import { formatCurrency, loadAdminCustomers, type AdminCustomer } from '@/lib/admin-data';
-import { applyAdminAccountAction, getAdminCustomerAccounts, type AdminAccountAction } from '@/lib/api';
+import {
+  applyAdminAccountAction,
+  getAdminCustomerAccounts,
+  type AdminAccountAction,
+} from '@/lib/api';
 
 type AdminAccount = {
   id: string;
@@ -43,8 +47,11 @@ function toAccounts(rows: Record<string, unknown>[]): AdminAccount[] {
 }
 
 export default function AdminAccountsPage() {
-  const { data: customerData, loading: customersLoading, error: customersError } =
-    useAdminResource(() => loadAdminCustomers());
+  const {
+    data: customerData,
+    loading: customersLoading,
+    error: customersError,
+  } = useAdminResource(() => loadAdminCustomers());
   const customers: AdminCustomer[] = customerData?.customers ?? [];
 
   const [selectedUserId, setSelectedUserId] = useState('');
@@ -52,12 +59,14 @@ export default function AdminAccountsPage() {
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [accountsError, setAccountsError] = useState<string | null>(null);
 
-  // Admin credit is a money movement, so it always needs an amount, a reason and
-  // a reference; the API rejects the request without them.
+  // Admin credit/debit is a money movement, so it always needs an amount, a
+  // reason and a reference; the API rejects the request without them.
   const [creditFor, setCreditFor] = useState<string | null>(null);
+  const [adjustAction, setAdjustAction] = useState<'CREDIT' | 'DEBIT'>('CREDIT');
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
   const [reference, setReference] = useState('');
+  const [force, setForce] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -97,6 +106,7 @@ export default function AdminAccountsPage() {
       setAmount('');
       setReason('');
       setReference('');
+      setForce(false);
       await loadAccounts(selectedUserId);
     } catch (cause) {
       setAccountsError(cause instanceof Error ? cause.message : 'Action failed');
@@ -135,7 +145,10 @@ export default function AdminAccountsPage() {
             </AdminState>
 
             {notice ? (
-              <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700" role="status">
+              <p
+                className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700"
+                role="status"
+              >
                 {notice}
               </p>
             ) : null}
@@ -198,9 +211,12 @@ export default function AdminAccountsPage() {
                           <Button
                             variant="ghost"
                             disabled={busy}
-                            onClick={() => setCreditFor(creditFor === account.id ? null : account.id)}
+                            onClick={() => {
+                              setAdjustAction('CREDIT');
+                              setCreditFor(creditFor === account.id ? null : account.id);
+                            }}
                           >
-                            Credit
+                            Credit / debit
                           </Button>
                         </div>
 
@@ -210,13 +226,23 @@ export default function AdminAccountsPage() {
                             onSubmit={(event) => {
                               event.preventDefault();
                               void runAction(account.id, {
-                                action: 'CREDIT',
+                                action: adjustAction,
                                 amount,
                                 reason,
                                 reference,
+                                force,
                               });
                             }}
                           >
+                            <Select
+                              value={adjustAction}
+                              onChange={(event) =>
+                                setAdjustAction(event.target.value as 'CREDIT' | 'DEBIT')
+                              }
+                            >
+                              <option value="CREDIT">Credit (deposit)</option>
+                              <option value="DEBIT">Debit (withdrawal)</option>
+                            </Select>
                             <Input
                               value={amount}
                               onChange={(event) => setAmount(event.target.value)}
@@ -229,7 +255,7 @@ export default function AdminAccountsPage() {
                             <Input
                               value={reason}
                               onChange={(event) => setReason(event.target.value)}
-                              placeholder="Reason"
+                              placeholder="Reason (internal — never shown to the customer)"
                               required
                             />
                             <Input
@@ -238,8 +264,22 @@ export default function AdminAccountsPage() {
                               placeholder="Reference"
                               required
                             />
+                            {adjustAction === 'DEBIT' ? (
+                              <label className="flex items-center gap-2 text-xs text-slate-600">
+                                <input
+                                  type="checkbox"
+                                  checked={force}
+                                  onChange={(event) => setForce(event.target.checked)}
+                                />
+                                Allow this debit to exceed the available balance
+                              </label>
+                            ) : null}
                             <Button type="submit" disabled={busy}>
-                              {busy ? 'Posting…' : 'Post credit'}
+                              {busy
+                                ? 'Posting…'
+                                : adjustAction === 'CREDIT'
+                                  ? 'Post credit'
+                                  : 'Post debit'}
                             </Button>
                           </form>
                         ) : null}

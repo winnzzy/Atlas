@@ -1,9 +1,17 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { Prisma} from '@prisma/client';
-import { TransactionStatus as PrismaTransactionStatus, TransactionType as PrismaTransactionType } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
+import {
+  TransactionStatus as PrismaTransactionStatus,
+  TransactionType as PrismaTransactionType,
+} from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CREDIT_TRANSACTION_TYPES, DEBIT_TRANSACTION_TYPES, TransactionType, TRANSFER_TRANSACTION_TYPES } from '../enums/transaction-type.enum';
+import {
+  CREDIT_TRANSACTION_TYPES,
+  DEBIT_TRANSACTION_TYPES,
+  TransactionType,
+  TRANSFER_TRANSACTION_TYPES,
+} from '../enums/transaction-type.enum';
 import { TransactionStatus } from '../enums/transaction-status.enum';
 
 export interface TransactionRecord {
@@ -97,13 +105,17 @@ export class TransactionRepository {
   }
 
   async findByReference(reference: string): Promise<TransactionRecord | null> {
-    const transaction = await this.prisma.transaction.findFirst({ where: { reference, deletedAt: null } });
+    const transaction = await this.prisma.transaction.findFirst({
+      where: { reference, deletedAt: null },
+    });
     return transaction ? this.toRecord(transaction) : null;
   }
 
   async findByIdempotencyKey(key: string): Promise<TransactionRecord | null> {
     const transactions = await this.prisma.transaction.findMany({ where: { deletedAt: null } });
-    const found = transactions.find((transaction) => this.metadata(transaction.metadata).idempotencyKey === key);
+    const found = transactions.find(
+      (transaction) => this.metadata(transaction.metadata).idempotencyKey === key,
+    );
     return found ? this.toRecord(found) : null;
   }
 
@@ -172,21 +184,54 @@ export class TransactionRepository {
           throw new Error('Internal transfer requires a counterparty account');
         }
 
-        const destination = await tx.bankAccount.findUnique({ where: { id: record.counterpartyAccountId } });
+        const destination = await tx.bankAccount.findUnique({
+          where: { id: record.counterpartyAccountId },
+        });
         if (!destination) {
           throw new Error(`Destination account ${record.counterpartyAccountId} not found`);
         }
 
         await this.applyAccountDelta(tx, record.id, source.id, amount.negated());
         await this.applyAccountDelta(tx, record.id, destination.id, amount);
-        await this.createTransactionLine(tx, record.id, 'DEBIT', source.accountNumber, amount, `Transfer out ${record.reference}`);
-        await this.createTransactionLine(tx, record.id, 'CREDIT', destination.accountNumber, amount, `Transfer in ${record.reference}`);
+        await this.createTransactionLine(
+          tx,
+          record.id,
+          'DEBIT',
+          source.accountNumber,
+          amount,
+          `Transfer out ${record.reference}`,
+        );
+        await this.createTransactionLine(
+          tx,
+          record.id,
+          'CREDIT',
+          destination.accountNumber,
+          amount,
+          `Transfer in ${record.reference}`,
+        );
       } else if (DEBIT_TRANSACTION_TYPES.has(record.type as TransactionType)) {
         await this.applyAccountDelta(tx, record.id, source.id, amount.negated());
-        await this.createTransactionLine(tx, record.id, 'DEBIT', source.accountNumber, amount, record.description ?? record.type);
-      } else if (CREDIT_TRANSACTION_TYPES.has(record.type as TransactionType) || record.type === TransactionType.ADJUSTMENT) {
+        await this.createTransactionLine(
+          tx,
+          record.id,
+          'DEBIT',
+          source.accountNumber,
+          amount,
+          record.description ?? record.type,
+        );
+      } else if (
+        CREDIT_TRANSACTION_TYPES.has(record.type as TransactionType) ||
+        record.type === TransactionType.ADJUSTMENT
+      ) {
         await this.applyAccountDelta(tx, record.id, source.id, amount);
-        await this.createTransactionLine(tx, record.id, 'CREDIT', source.accountNumber, amount, record.description ?? record.type);
+        await this.createTransactionLine(
+          tx,
+          record.id,
+          'CREDIT',
+          source.accountNumber,
+          amount,
+          record.description ?? record.type,
+        );
       }
 
       await tx.transaction.update({
@@ -237,7 +282,11 @@ export class TransactionRepository {
       .filter((row) => !params.type || row.type === params.type)
       .filter((row) => !params.status || row.status === params.status)
       .filter((row) => !params.idempotencyKey || row.idempotencyKey === params.idempotencyKey)
-      .filter((row) => !params.counterpartyAccountId || row.counterpartyAccountId === params.counterpartyAccountId);
+      .filter(
+        (row) =>
+          !params.counterpartyAccountId ||
+          row.counterpartyAccountId === params.counterpartyAccountId,
+      );
 
     const lastItem = filtered.at(-1);
     return {
@@ -247,9 +296,16 @@ export class TransactionRepository {
     };
   }
 
-  async findByAccount(accountId: string, limit: number, cursor?: string): Promise<TransactionSearchResult> {
+  async findByAccount(
+    accountId: string,
+    limit: number,
+    cursor?: string,
+  ): Promise<TransactionSearchResult> {
     const direct = await this.search({ accountId, limit, cursor });
-    const all = await this.prisma.transaction.findMany({ where: { deletedAt: null }, orderBy: { createdAt: 'desc' } });
+    const all = await this.prisma.transaction.findMany({
+      where: { deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
     const counterparty = all
       .map((row) => this.toRecord(row))
       .filter((row) => row.counterpartyAccountId === accountId);
@@ -282,6 +338,32 @@ export class TransactionRepository {
     });
   }
 
+  /** Soft-delete several transactions in one round trip (bulk admin clear). */
+  async softDeleteMany(ids: string[], deletedBy?: string): Promise<void> {
+    if (ids.length === 0) return;
+    await this.prisma.transaction.updateMany({
+      where: { id: { in: ids } },
+      data: {
+        deletedAt: new Date(),
+        updatedBy: this.uuidOrUndefined(deletedBy),
+      },
+    });
+  }
+
+  /**
+   * IDs of every non-deleted transaction whose `accountId` is this account (the
+   * account's own ledger rows — not the counterparty leg of a transfer it received).
+   * Used for "clear all history" so a customer's account can be wiped without
+   * touching the other party's copy of a shared transfer.
+   */
+  async findIdsByAccount(accountId: string): Promise<string[]> {
+    const rows = await this.prisma.transaction.findMany({
+      where: { accountId, deletedAt: null },
+      select: { id: true },
+    });
+    return rows.map((row) => row.id);
+  }
+
   async existsByReference(reference: string): Promise<boolean> {
     return (await this.prisma.transaction.count({ where: { reference, deletedAt: null } })) > 0;
   }
@@ -296,7 +378,12 @@ export class TransactionRepository {
     });
   }
 
-  async sumAmountByAccountAndDateRange(accountId: string, from: Date, to: Date, type?: string): Promise<string> {
+  async sumAmountByAccountAndDateRange(
+    accountId: string,
+    from: Date,
+    to: Date,
+    type?: string,
+  ): Promise<string> {
     const transactions = await this.findByAccountAndDateRange(accountId, from, to);
     const total = transactions
       .filter((transaction) => !type || transaction.type === type)
@@ -304,7 +391,11 @@ export class TransactionRepository {
     return total.toFixed(2);
   }
 
-  async findByAccountAndDateRange(accountId: string, from: Date, to: Date): Promise<TransactionRecord[]> {
+  async findByAccountAndDateRange(
+    accountId: string,
+    from: Date,
+    to: Date,
+  ): Promise<TransactionRecord[]> {
     const rows = await this.prisma.transaction.findMany({
       where: { accountId, createdAt: { gte: from, lte: to }, deletedAt: null },
       orderBy: { createdAt: 'asc' },
@@ -312,7 +403,12 @@ export class TransactionRepository {
     return rows.map((row) => this.toRecord(row));
   }
 
-  private async applyAccountDelta(tx: Prisma.TransactionClient, transactionId: string, accountId: string, delta: Decimal): Promise<void> {
+  private async applyAccountDelta(
+    tx: Prisma.TransactionClient,
+    transactionId: string,
+    accountId: string,
+    delta: Decimal,
+  ): Promise<void> {
     const account = await tx.bankAccount.findUnique({ where: { id: accountId } });
     if (!account) {
       throw new Error(`Account ${accountId} not found`);
@@ -379,7 +475,10 @@ export class TransactionRepository {
       counterpartyAccountId: this.asString(metadata.counterpartyAccountId),
       metadata: this.cleanUserMetadata(metadata),
       journalId: this.asString(metadata.journalId),
-      failureReason: row.status === PrismaTransactionStatus.FAILED ? row.description ?? undefined : this.asString(metadata.failureReason),
+      failureReason:
+        row.status === PrismaTransactionStatus.FAILED
+          ? (row.description ?? undefined)
+          : this.asString(metadata.failureReason),
       failureCode: this.asString(metadata.failureCode),
       reversalId: this.asString(metadata.reversalId),
       reversalOfId: this.asString(metadata.reversalOfId),
@@ -392,7 +491,10 @@ export class TransactionRepository {
       authorizedAt: this.asDate(metadata.authorizedAt),
       postedAt: this.asDate(metadata.postedAt),
       settledAt: row.settledAt ?? undefined,
-      completedAt: row.status === PrismaTransactionStatus.COMPLETED ? row.settledAt ?? row.updatedAt : undefined,
+      completedAt:
+        row.status === PrismaTransactionStatus.COMPLETED
+          ? (row.settledAt ?? row.updatedAt)
+          : undefined,
       failedAt: this.asDate(metadata.failedAt),
       cancelledAt: this.asDate(metadata.cancelledAt),
       reversedAt: this.asDate(metadata.reversedAt),
@@ -425,7 +527,9 @@ export class TransactionRepository {
   }
 
   private metadata(value: unknown): TransactionMetadata {
-    return value && typeof value === 'object' && !Array.isArray(value) ? value as TransactionMetadata : {};
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as TransactionMetadata)
+      : {};
   }
 
   private cleanUserMetadata(metadata: TransactionMetadata): Record<string, string> | undefined {
@@ -450,8 +554,9 @@ export class TransactionRepository {
       'expiresAt',
       'balanceApplied',
     ]);
-    const entries = Object.entries(metadata)
-      .filter(([key, value]) => !internal.has(key) && typeof value === 'string') as Array<[string, string]>;
+    const entries = Object.entries(metadata).filter(
+      ([key, value]) => !internal.has(key) && typeof value === 'string',
+    ) as Array<[string, string]>;
     return entries.length > 0 ? Object.fromEntries(entries) : undefined;
   }
 
@@ -459,17 +564,25 @@ export class TransactionRepository {
     if (type === TransactionType.INTERNAL_TRANSFER) return PrismaTransactionType.TRANSFER_OUT;
     if (type === TransactionType.ACH_CREDIT) return PrismaTransactionType.ACH_DEPOSIT;
     if (type === TransactionType.ACH_DEBIT) return PrismaTransactionType.ACH_WITHDRAWAL;
-    if (type === TransactionType.WIRE_DOMESTIC || type === TransactionType.WIRE_INTERNATIONAL || type === TransactionType.SWIFT) {
+    if (
+      type === TransactionType.WIRE_DOMESTIC ||
+      type === TransactionType.WIRE_INTERNATIONAL ||
+      type === TransactionType.SWIFT
+    ) {
       return PrismaTransactionType.WIRE_OUTGOING;
     }
-    if (type === TransactionType.CARD_PURCHASE || type === TransactionType.CARD_AUTHORIZATION || type === TransactionType.CARD_CAPTURE) {
+    if (
+      type === TransactionType.CARD_PURCHASE ||
+      type === TransactionType.CARD_AUTHORIZATION ||
+      type === TransactionType.CARD_CAPTURE
+    ) {
       return PrismaTransactionType.CARD_PURCHASE;
     }
     if (type === TransactionType.PAYROLL_DEPOSIT) return PrismaTransactionType.DEPOSIT;
     if (type === TransactionType.INTEREST_CREDIT) return PrismaTransactionType.INTEREST;
     if (type === TransactionType.REVERSAL) return PrismaTransactionType.ADJUSTMENT;
     return Object.values(PrismaTransactionType).includes(type as PrismaTransactionType)
-      ? type as PrismaTransactionType
+      ? (type as PrismaTransactionType)
       : PrismaTransactionType.ADJUSTMENT;
   }
 
@@ -482,13 +595,18 @@ export class TransactionRepository {
   }
 
   private toPrismaStatus(status: string): PrismaTransactionStatus {
-    if (status === TransactionStatus.COMPLETED || status === TransactionStatus.SETTLED || status === TransactionStatus.POSTED) {
+    if (
+      status === TransactionStatus.COMPLETED ||
+      status === TransactionStatus.SETTLED ||
+      status === TransactionStatus.POSTED
+    ) {
       return PrismaTransactionStatus.COMPLETED;
     }
     if (status === TransactionStatus.FAILED) return PrismaTransactionStatus.FAILED;
     if (status === TransactionStatus.CANCELLED) return PrismaTransactionStatus.CANCELLED;
     if (status === TransactionStatus.REVERSED) return PrismaTransactionStatus.REVERSED;
-    if (status === TransactionStatus.AUTHORIZED || status === TransactionStatus.VALIDATED) return PrismaTransactionStatus.PROCESSING;
+    if (status === TransactionStatus.AUTHORIZED || status === TransactionStatus.VALIDATED)
+      return PrismaTransactionStatus.PROCESSING;
     return PrismaTransactionStatus.PENDING;
   }
 
@@ -510,7 +628,8 @@ export class TransactionRepository {
   }
 
   private uuidOrUndefined(value: string | undefined): string | undefined {
-    return value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+    return value &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
       ? value
       : undefined;
   }

@@ -12,8 +12,11 @@ import { Select } from '@/components/ui/select';
 import { Table, Tbody, Td, Th, Thead, Tr } from '@/components/ui/table';
 import {
   applyAdminAccountRestriction,
+  applyAdminInvestmentAction,
   assignAdminAccount,
+  bulkDeleteAdminTransactions,
   decideAdminKyc,
+  generateAdminHistory,
   generateAdminPresentation,
   getAdminCustomerAccounts,
   getAdminCustomerDetail,
@@ -70,6 +73,18 @@ export default function AdminCustomerDetailPage() {
   const [presStatus, setPresStatus] = useState<AdminPresentationStatus | null>(null);
   const [presConfirmOpen, setPresConfirmOpen] = useState(false);
 
+  // Additional (balance-neutral) history generator
+  const [histAccountId, setHistAccountId] = useState('');
+  const [histMonths, setHistMonths] = useState('6');
+  const [histTotalAmount, setHistTotalAmount] = useState('');
+  const [histTransactionCount, setHistTransactionCount] = useState('');
+
+  // Investment balance adjustment
+  const [investSymbol, setInvestSymbol] = useState('');
+  const [investAction, setInvestAction] = useState<'ADMIN_CREDIT' | 'ADMIN_DEBIT'>('ADMIN_CREDIT');
+  const [investAmount, setInvestAmount] = useState('');
+  const [investReason, setInvestReason] = useState('');
+
   // Remove customer
   const [removeOpen, setRemoveOpen] = useState(false);
   const [removeReason, setRemoveReason] = useState('');
@@ -115,6 +130,12 @@ export default function AdminCustomerDetailPage() {
     }
   }, [accounts, presAccountId]);
 
+  useEffect(() => {
+    if (!histAccountId && accounts.length > 0) {
+      setHistAccountId(String(accounts[0]?.id ?? ''));
+    }
+  }, [accounts, histAccountId]);
+
   const loadPresStatus = useCallback(
     async (accountId: string) => {
       if (!accountId) {
@@ -148,6 +169,41 @@ export default function AdminCustomerDetailPage() {
       replace ? 'Presentation activity replaced.' : 'Presentation activity generated.',
     );
   };
+
+  const runGenerateHistory = () =>
+    run(
+      () =>
+        generateAdminHistory(userId, histAccountId, {
+          months: histMonths ? Number(histMonths) : undefined,
+          totalAmount: histTotalAmount || undefined,
+          transactionCount: histTransactionCount ? Number(histTransactionCount) : undefined,
+        }),
+      'Additional transaction history generated. The account balance was not changed.',
+    );
+
+  const clearAccountHistory = (accountId: string) => {
+    if (!window.confirm("Clear this account's entire transaction history? This cannot be undone."))
+      return;
+    void run(
+      () => bulkDeleteAdminTransactions(userId, { accountId, all: true }),
+      'Transaction history cleared.',
+    );
+  };
+
+  const runInvestmentAdjustment = () =>
+    run(
+      () =>
+        applyAdminInvestmentAction({
+          action: investAction,
+          userId,
+          symbol: investSymbol.trim().toUpperCase(),
+          amount: Number(investAmount),
+          reason: investReason.trim(),
+        }),
+      investAction === 'ADMIN_CREDIT'
+        ? 'Investment balance credited.'
+        : 'Investment balance debited.',
+    );
 
   const run = async (action: () => Promise<unknown>, message: string) => {
     setBusy(true);
@@ -219,13 +275,23 @@ export default function AdminCustomerDetailPage() {
           <p className="text-sm text-slate-500">{detail.email}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant={detail.status === 'ACTIVE' ? 'success' : 'warning'}>{detail.status}</Badge>
+          <Badge variant={detail.status === 'ACTIVE' ? 'success' : 'warning'}>
+            {detail.status}
+          </Badge>
           <Badge variant={kycVariant(detail.kycStatus)}>KYC: {detail.kycStatus}</Badge>
         </div>
       </div>
 
-      {error ? <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{error}</p> : null}
-      {notice ? <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700" role="status">{notice}</p> : null}
+      {error ? (
+        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {notice ? (
+        <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700" role="status">
+          {notice}
+        </p>
+      ) : null}
 
       {/* Customer information */}
       <Card>
@@ -318,6 +384,7 @@ export default function AdminCustomerDetailPage() {
                   <Th>Status</Th>
                   <Th>Available</Th>
                   <Th>Restrictions</Th>
+                  <Th>History</Th>
                 </Tr>
               </Thead>
               <Tbody>
@@ -330,7 +397,9 @@ export default function AdminCustomerDetailPage() {
                       <Td>••{String(acc.accountNumber ?? '').slice(-4)}</Td>
                       <Td>{String(acc.type ?? '—')}</Td>
                       <Td>
-                        <Badge variant={status === 'ACTIVE' ? 'success' : 'warning'}>{status}</Badge>
+                        <Badge variant={status === 'ACTIVE' ? 'success' : 'warning'}>
+                          {status}
+                        </Badge>
                       </Td>
                       <Td>{String(acc.availableBalance ?? acc.currentBalance ?? '0')}</Td>
                       <Td>
@@ -339,10 +408,7 @@ export default function AdminCustomerDetailPage() {
                             variant="secondary"
                             disabled={busy}
                             onClick={() =>
-                              run(
-                                () => releaseAdminAccountRestriction(id),
-                                'Restriction released.',
-                              )
+                              run(() => releaseAdminAccountRestriction(id), 'Restriction released.')
                             }
                           >
                             Release
@@ -359,6 +425,16 @@ export default function AdminCustomerDetailPage() {
                             Restrict
                           </Button>
                         )}
+                      </Td>
+                      <Td>
+                        <Button
+                          variant="danger"
+                          className="px-2.5 py-1.5 text-xs"
+                          disabled={busy}
+                          onClick={() => clearAccountHistory(id)}
+                        >
+                          Clear history
+                        </Button>
                       </Td>
                     </Tr>
                   );
@@ -387,8 +463,13 @@ export default function AdminCustomerDetailPage() {
             <>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Target account</label>
-                  <Select value={presAccountId} onChange={(event) => setPresAccountId(event.target.value)}>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">
+                    Target account
+                  </label>
+                  <Select
+                    value={presAccountId}
+                    onChange={(event) => setPresAccountId(event.target.value)}
+                  >
                     {accounts.map((acc) => {
                       const id = String(acc.id ?? '');
                       return (
@@ -400,31 +481,44 @@ export default function AdminCustomerDetailPage() {
                   </Select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Final balance</label>
-                  <Input value={presTarget} onChange={(event) => setPresTarget(event.target.value)} />
+                  <label className="mb-1 block text-sm font-medium text-slate-700">
+                    Final balance
+                  </label>
+                  <Input
+                    value={presTarget}
+                    onChange={(event) => setPresTarget(event.target.value)}
+                  />
                 </div>
               </div>
 
               {presStatus ? (
                 <div className="grid gap-3 rounded-md bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-4">
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Current balance</p>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">
+                      Current balance
+                    </p>
                     <p className="text-sm font-semibold text-slate-900">
                       {formatCurrency(presStatus.currentBalance)}
                     </p>
                   </div>
                   <div>
                     <p className="text-xs uppercase tracking-wide text-slate-500">Transactions</p>
-                    <p className="text-sm font-semibold text-slate-900">{presStatus.transactionCount}</p>
+                    <p className="text-sm font-semibold text-slate-900">
+                      {presStatus.transactionCount}
+                    </p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Generated credits</p>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">
+                      Generated credits
+                    </p>
                     <p className="text-sm font-semibold text-emerald-700">
                       {formatCurrency(presStatus.presentationCredits)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Generated debits</p>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">
+                      Generated debits
+                    </p>
                     <p className="text-sm font-semibold text-rose-700">
                       {formatCurrency(presStatus.presentationDebits)}
                     </p>
@@ -441,7 +535,11 @@ export default function AdminCustomerDetailPage() {
                       : ''}
                     . Regenerating will replace only the generated records.
                   </p>
-                  <Button variant="secondary" disabled={busy} onClick={() => setPresConfirmOpen(true)}>
+                  <Button
+                    variant="secondary"
+                    disabled={busy}
+                    onClick={() => setPresConfirmOpen(true)}
+                  >
                     Replace presentation activity
                   </Button>
                 </div>
@@ -452,6 +550,147 @@ export default function AdminCustomerDetailPage() {
               )}
             </>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Additional history generator */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Generate additional history</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-slate-600">
+            Backfill realistic transaction history for this account. Unlike presentation activity,
+            this never changes the account&apos;s current balance — generated credits and debits
+            always net to zero.
+          </p>
+          {accounts.length === 0 ? (
+            <p className="text-sm text-slate-600">Create an account first to generate history.</p>
+          ) : (
+            <>
+              <div className="grid gap-4 md:grid-cols-4">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Account</label>
+                  <Select
+                    value={histAccountId}
+                    onChange={(event) => setHistAccountId(event.target.value)}
+                  >
+                    {accounts.map((acc) => {
+                      const id = String(acc.id ?? '');
+                      return (
+                        <option key={id} value={id}>
+                          ••{String(acc.accountNumber ?? '').slice(-4)} · {String(acc.type ?? '—')}
+                        </option>
+                      );
+                    })}
+                  </Select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Months</label>
+                  <Input
+                    value={histMonths}
+                    onChange={(event) => setHistMonths(event.target.value)}
+                    type="number"
+                    min="1"
+                    max="12"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">
+                    Total volume (optional)
+                  </label>
+                  <Input
+                    value={histTotalAmount}
+                    onChange={(event) => setHistTotalAmount(event.target.value)}
+                    placeholder="e.g. 15000"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">
+                    # of transactions (optional)
+                  </label>
+                  <Input
+                    value={histTransactionCount}
+                    onChange={(event) => setHistTransactionCount(event.target.value)}
+                    type="number"
+                    min="1"
+                    max="500"
+                  />
+                </div>
+              </div>
+              <Button disabled={busy || !histAccountId} onClick={() => void runGenerateHistory()}>
+                {busy ? 'Generating…' : 'Generate history'}
+              </Button>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Investment balance adjustment */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Investment balance</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-slate-600">
+            Directly credit or debit the customer&apos;s holding for an asset. It appears in their
+            portfolio and transaction history like an ordinary deposit or withdrawal; the reason is
+            recorded in the audit log only.
+          </p>
+          <div className="grid gap-4 md:grid-cols-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Action</label>
+              <Select
+                value={investAction}
+                onChange={(event) =>
+                  setInvestAction(event.target.value as 'ADMIN_CREDIT' | 'ADMIN_DEBIT')
+                }
+              >
+                <option value="ADMIN_CREDIT">Credit</option>
+                <option value="ADMIN_DEBIT">Debit</option>
+              </Select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Symbol</label>
+              <Input
+                value={investSymbol}
+                onChange={(event) => setInvestSymbol(event.target.value)}
+                placeholder="BTC"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Amount (units)
+              </label>
+              <Input
+                value={investAmount}
+                onChange={(event) => setInvestAmount(event.target.value)}
+                type="number"
+                min="0"
+                step="any"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Reason (audit only)
+              </label>
+              <Input
+                value={investReason}
+                onChange={(event) => setInvestReason(event.target.value)}
+                placeholder="Reason"
+              />
+            </div>
+          </div>
+          <Button
+            disabled={busy || !investSymbol.trim() || !investAmount || !investReason.trim()}
+            onClick={() => void runInvestmentAdjustment()}
+          >
+            {busy
+              ? 'Posting…'
+              : investAction === 'ADMIN_CREDIT'
+                ? 'Credit balance'
+                : 'Debit balance'}
+          </Button>
         </CardContent>
       </Card>
 
@@ -655,7 +894,11 @@ export default function AdminCustomerDetailPage() {
       </Modal>
 
       {/* Restrict account modal */}
-      <Modal open={Boolean(restrictFor)} title="Restrict account" onClose={() => setRestrictFor(null)}>
+      <Modal
+        open={Boolean(restrictFor)}
+        title="Restrict account"
+        onClose={() => setRestrictFor(null)}
+      >
         <div className="space-y-3">
           <p className="text-sm text-slate-600">
             The customer keeps read access but cannot initiate transfers while restricted.

@@ -1,9 +1,23 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsArray, IsBoolean, IsDateString, IsEnum, IsInt, IsNotEmpty, IsObject, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsDateString,
+  IsEnum,
+  IsInt,
+  IsNotEmpty,
+  IsObject,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  Min,
+} from 'class-validator';
 import { NotificationChannel, NotificationType } from '@prisma/client';
 
-export type AdminRole = 'SUPPORT' | 'OPERATIONS' | 'COMPLIANCE' | 'FINANCE' | 'ADMIN' | 'SUPER_ADMIN';
+export type AdminRole =
+  'SUPPORT' | 'OPERATIONS' | 'COMPLIANCE' | 'FINANCE' | 'ADMIN' | 'SUPER_ADMIN';
 
 export class AdminContextDto {
   @ApiProperty({ enum: ['SUPPORT', 'OPERATIONS', 'COMPLIANCE', 'FINANCE', 'ADMIN', 'SUPER_ADMIN'] })
@@ -162,7 +176,9 @@ export class CustomerStatusActionDto {
 }
 
 export class AccountAdminActionDto {
-  @ApiProperty({ enum: ['FREEZE', 'UNFREEZE', 'LOCK', 'UNLOCK', 'CLOSE', 'ARCHIVE', 'CREDIT', 'DEBIT'] })
+  @ApiProperty({
+    enum: ['FREEZE', 'UNFREEZE', 'LOCK', 'UNLOCK', 'CLOSE', 'ARCHIVE', 'CREDIT', 'DEBIT'],
+  })
   @IsString()
   action!: 'FREEZE' | 'UNFREEZE' | 'LOCK' | 'UNLOCK' | 'CLOSE' | 'ARCHIVE' | 'CREDIT' | 'DEBIT';
 
@@ -180,6 +196,58 @@ export class AccountAdminActionDto {
   @IsOptional()
   @IsString()
   reference?: string;
+
+  @ApiPropertyOptional({
+    description: 'Allow a DEBIT to push the account below zero available balance',
+  })
+  @IsOptional()
+  @IsBoolean()
+  force?: boolean;
+}
+
+export class BulkDeleteTransactionsDto {
+  @ApiPropertyOptional({ type: [String], description: 'Specific transaction ids to delete' })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  transactionIds?: string[];
+
+  @ApiPropertyOptional({
+    description: 'Account whose entire transaction history should be cleared',
+  })
+  @IsOptional()
+  @IsUUID()
+  accountId?: string;
+
+  @ApiPropertyOptional({ description: 'Must be true together with accountId to clear all history' })
+  @IsOptional()
+  @IsBoolean()
+  all?: boolean;
+}
+
+export class GenerateHistoryDto {
+  @ApiPropertyOptional({ description: 'History length in months (1-12), defaults to 6' })
+  @IsOptional()
+  @Transform(({ value }) => Number(value))
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  months?: number;
+
+  @ApiPropertyOptional({
+    description: 'Approximate total volume (sum of generated amounts) to spread across the period',
+  })
+  @IsOptional()
+  @IsString()
+  totalAmount?: string;
+
+  @ApiPropertyOptional({ description: 'Approximate number of transactions to generate (1-500)' })
+  @IsOptional()
+  @Transform(({ value }) => Number(value))
+  @IsInt()
+  @Min(1)
+  @Max(500)
+  transactionCount?: number;
 }
 
 export class CardAdminActionDto {
@@ -204,16 +272,37 @@ export class CardAdminActionDto {
 }
 
 export class InvestmentAdminActionDto {
-  @ApiProperty({ enum: ['APPROVE_DEPOSIT', 'APPROVE_WITHDRAWAL', 'UPDATE_PRICE', 'ENABLE_ASSET', 'DISABLE_ASSET', 'SUSPEND_ASSET'] })
+  @ApiProperty({
+    enum: [
+      'APPROVE_DEPOSIT',
+      'APPROVE_WITHDRAWAL',
+      'UPDATE_PRICE',
+      'ENABLE_ASSET',
+      'DISABLE_ASSET',
+      'SUSPEND_ASSET',
+      'ADMIN_CREDIT',
+      'ADMIN_DEBIT',
+    ],
+  })
   @IsString()
-  action!: 'APPROVE_DEPOSIT' | 'APPROVE_WITHDRAWAL' | 'UPDATE_PRICE' | 'ENABLE_ASSET' | 'DISABLE_ASSET' | 'SUSPEND_ASSET';
+  action!:
+    | 'APPROVE_DEPOSIT'
+    | 'APPROVE_WITHDRAWAL'
+    | 'UPDATE_PRICE'
+    | 'ENABLE_ASSET'
+    | 'DISABLE_ASSET'
+    | 'SUSPEND_ASSET'
+    | 'ADMIN_CREDIT'
+    | 'ADMIN_DEBIT';
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsUUID()
   id?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    description: 'Asset symbol, required for UPDATE_PRICE and ADMIN_CREDIT/ADMIN_DEBIT',
+  })
   @IsOptional()
   @IsString()
   symbol?: string;
@@ -223,6 +312,30 @@ export class InvestmentAdminActionDto {
   @Transform(({ value }) => Number(value))
   @IsInt()
   price?: number;
+
+  @ApiPropertyOptional({ description: 'Target customer, required for ADMIN_CREDIT/ADMIN_DEBIT' })
+  @IsOptional()
+  @IsUUID()
+  userId?: string;
+
+  @ApiPropertyOptional({ description: 'Asset-unit amount, required for ADMIN_CREDIT/ADMIN_DEBIT' })
+  @IsOptional()
+  @Transform(({ value }) => Number(value))
+  amount?: number;
+
+  @ApiPropertyOptional({
+    description: 'Reason for the balance adjustment (audit only, never shown to the customer)',
+  })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+
+  @ApiPropertyOptional({
+    description: 'Allow an ADMIN_DEBIT to exceed the current holding quantity',
+  })
+  @IsOptional()
+  @IsBoolean()
+  force?: boolean;
 }
 
 export class NotificationQueueQueryDto extends PaginationDto {

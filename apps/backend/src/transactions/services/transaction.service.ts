@@ -3,7 +3,10 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { randomUUID } from 'crypto';
 import { PostingType, EntrySide } from '../../ledger/dto/post-journal.dto';
 import { ReversalType } from '../../ledger/dto/reverse-journal.dto';
-import { TransactionType, TRANSACTION_TYPE_TO_LEDGER_POSTING } from '../enums/transaction-type.enum';
+import {
+  TransactionType,
+  TRANSACTION_TYPE_TO_LEDGER_POSTING,
+} from '../enums/transaction-type.enum';
 import { TransactionStatus, validateStatusTransition } from '../enums/transaction-status.enum';
 import type { CreateTransactionDto } from '../dto/create-transaction.dto';
 import type { SearchTransactionsDto, StatementExportDto } from '../dto/search-transactions.dto';
@@ -20,7 +23,10 @@ import {
   TransactionPolicyViolationException,
   TransactionNotReversibleException,
 } from '../exceptions/transaction-domain.exception';
-import { type TransactionRecord, TransactionRepository } from '../repositories/transaction.repository';
+import {
+  type TransactionRecord,
+  TransactionRepository,
+} from '../repositories/transaction.repository';
 import { TransactionPolicy } from '../policies/transaction.policy';
 import { TransactionMapper } from '../mappers/transaction.mapper';
 import {
@@ -182,10 +188,18 @@ export class TransactionService {
   ): Promise<TransactionResponseDto> {
     try {
       // ─── VALIDATED ───
-      transaction = await this.transitionStatus(transaction, TransactionStatus.VALIDATED, performedBy);
+      transaction = await this.transitionStatus(
+        transaction,
+        TransactionStatus.VALIDATED,
+        performedBy,
+      );
 
       // ─── AUTHORIZED ───
-      transaction = await this.transitionStatus(transaction, TransactionStatus.AUTHORIZED, performedBy);
+      transaction = await this.transitionStatus(
+        transaction,
+        TransactionStatus.AUTHORIZED,
+        performedBy,
+      );
 
       this.emitEvent(
         new TransactionAuthorizedEvent(transaction.id, transaction.accountId, {
@@ -197,13 +211,21 @@ export class TransactionService {
       );
 
       // ─── PENDING ───
-      transaction = await this.transitionStatus(transaction, TransactionStatus.PENDING, performedBy);
+      transaction = await this.transitionStatus(
+        transaction,
+        TransactionStatus.PENDING,
+        performedBy,
+      );
 
       // ─── POSTED (Ledger Posting) ───
       transaction = await this.postToLedger(transaction, performedBy);
 
       // ─── SETTLED ───
-      transaction = await this.transitionStatus(transaction, TransactionStatus.SETTLED, performedBy);
+      transaction = await this.transitionStatus(
+        transaction,
+        TransactionStatus.SETTLED,
+        performedBy,
+      );
 
       this.emitEvent(
         new TransactionSettledEvent(transaction.id, transaction.accountId, {
@@ -214,7 +236,11 @@ export class TransactionService {
       );
 
       // ─── COMPLETED ───
-      transaction = await this.transitionStatus(transaction, TransactionStatus.COMPLETED, performedBy);
+      transaction = await this.transitionStatus(
+        transaction,
+        TransactionStatus.COMPLETED,
+        performedBy,
+      );
 
       this.emitEvent(
         new TransactionCompletedEvent(transaction.id, transaction.accountId, {
@@ -242,7 +268,9 @@ export class TransactionService {
     transaction: TransactionRecord,
     performedBy?: string,
   ): Promise<TransactionRecord> {
-    const ledgerType = (TRANSACTION_TYPE_TO_LEDGER_POSTING[transaction.type] as PostingType | undefined) ?? PostingType.ADJUSTMENT;
+    const ledgerType =
+      (TRANSACTION_TYPE_TO_LEDGER_POSTING[transaction.type] as PostingType | undefined) ??
+      PostingType.ADJUSTMENT;
 
     // Build ledger journal lines based on transaction type
     const lines = this.buildLedgerLines(transaction);
@@ -288,7 +316,12 @@ export class TransactionService {
     transaction: TransactionRecord,
   ): Array<{ accountId: string; side: EntrySide; amount: string; description?: string }> {
     const amount = Math.round(parseFloat(transaction.amount) * 100).toString(); // Convert to minor units
-    const lines: Array<{ accountId: string; side: EntrySide; amount: string; description?: string }> = [];
+    const lines: Array<{
+      accountId: string;
+      side: EntrySide;
+      amount: string;
+      description?: string;
+    }> = [];
 
     switch (transaction.type) {
       case TransactionType.DEPOSIT:
@@ -329,7 +362,9 @@ export class TransactionService {
         // Debit: Source account
         // Credit: Destination account
         if (!transaction.counterpartyAccountId) {
-          throw new TransactionValidationException('Internal transfer requires a counterparty account');
+          throw new TransactionValidationException(
+            'Internal transfer requires a counterparty account',
+          );
         }
         lines.push({
           accountId: transaction.counterpartyAccountId,
@@ -535,7 +570,10 @@ export class TransactionService {
     return this.mapper.toResponseDto(transaction);
   }
 
-  async getTransactionForUser(user: AuthenticatedUser, id: string): Promise<TransactionResponseDto> {
+  async getTransactionForUser(
+    user: AuthenticatedUser,
+    id: string,
+  ): Promise<TransactionResponseDto> {
     const transaction = await this.repository.findById(id);
     if (!transaction) {
       throw new TransactionNotFoundException(id);
@@ -589,7 +627,9 @@ export class TransactionService {
 
     const accounts = await this.accountService.listAccounts(user, { limit: 100 });
     const results = await Promise.all(
-      accounts.data.map((account) => this.repository.findByAccount(account.id, dto.limit ?? 50, dto.cursor)),
+      accounts.data.map((account) =>
+        this.repository.findByAccount(account.id, dto.limit ?? 50, dto.cursor),
+      ),
     );
     const items = results
       .flatMap((result) => result.items)
@@ -684,7 +724,7 @@ export class TransactionService {
     try {
       await this.ledgerService.reverseJournal({
         transactionId: transaction.journalId,
-          type: ReversalType.FULL,
+        type: ReversalType.FULL,
         reason: `Transaction reversal: ${reason}`,
       });
     } catch (error) {
@@ -722,7 +762,10 @@ export class TransactionService {
    * this soft-delete moves no money: no balance change, no ledger reversal, no
    * snapshot. An audit entry is recorded for the action.
    */
-  async deleteFailedTransaction(id: string, performedBy?: string): Promise<{ id: string; deleted: boolean }> {
+  async deleteFailedTransaction(
+    id: string,
+    performedBy?: string,
+  ): Promise<{ id: string; deleted: boolean }> {
     const transaction = await this.repository.findById(id);
     if (!transaction) {
       throw new TransactionNotFoundException(id);
@@ -742,6 +785,91 @@ export class TransactionService {
     });
 
     return { id, deleted: true };
+  }
+
+  /**
+   * Admin-only: permanently remove a transaction from history regardless of its
+   * status. Unlike {@link deleteFailedTransaction} this is not restricted to
+   * FAILED records — an admin can clear COMPLETED history too. It is still only
+   * ever a soft delete: no balance, ledger, or snapshot is touched, so the
+   * account's money position is unaffected by the record disappearing from
+   * history. Reversing the underlying money movement (if that is ever wanted)
+   * is the separate `/reverse` endpoint's job, not this one's.
+   *
+   * This method must only ever be reached from an admin-authorized path — it is
+   * intentionally not wired to any customer-facing controller.
+   */
+  async adminDeleteTransaction(
+    id: string,
+    performedBy?: string,
+  ): Promise<{ id: string; deleted: boolean }> {
+    const transaction = await this.repository.findById(id);
+    if (!transaction) {
+      throw new TransactionNotFoundException(id);
+    }
+
+    await this.repository.softDelete(id, performedBy);
+
+    this.audit('ADMIN_DELETED', transaction, performedBy, {
+      status: transaction.status,
+      reference: transaction.reference,
+    });
+
+    return { id, deleted: true };
+  }
+
+  /**
+   * Admin-only: soft-delete a specific set of transactions in one call.
+   * Unknown/already-deleted ids are silently skipped so a stale selection in
+   * the admin UI never fails the whole batch.
+   */
+  async adminBulkDeleteTransactions(
+    transactionIds: string[],
+    performedBy?: string,
+  ): Promise<{ requested: number; deleted: number }> {
+    const unique = Array.from(new Set(transactionIds)).filter(Boolean);
+    if (unique.length === 0) {
+      return { requested: 0, deleted: 0 };
+    }
+
+    const existing = await Promise.all(unique.map((id) => this.repository.findById(id)));
+    const found = existing.filter((row): row is TransactionRecord => row !== null);
+
+    await this.repository.softDeleteMany(
+      found.map((row) => row.id),
+      performedBy,
+    );
+
+    for (const transaction of found) {
+      this.audit('ADMIN_DELETED', transaction, performedBy, {
+        status: transaction.status,
+        reference: transaction.reference,
+      });
+    }
+
+    return { requested: unique.length, deleted: found.length };
+  }
+
+  /**
+   * Admin-only: clear every transaction on an account's own ledger (its
+   * "clear all history" action). Only rows whose `accountId` is this account
+   * are removed — the counterparty's copy of a shared internal transfer is a
+   * separate account's own row and is left untouched. Soft delete only: no
+   * balance/ledger impact.
+   */
+  async adminClearAccountHistory(
+    accountId: string,
+    performedBy?: string,
+  ): Promise<{ accountId: string; deleted: number }> {
+    const ids = await this.repository.findIdsByAccount(accountId);
+    await this.repository.softDeleteMany(ids, performedBy);
+
+    this.audit('ADMIN_CLEAR_HISTORY', undefined, performedBy, {
+      accountId,
+      deletedCount: String(ids.length),
+    });
+
+    return { accountId, deleted: ids.length };
   }
 
   /**
@@ -779,11 +907,7 @@ export class TransactionService {
     const from = new Date(dto.fromDate);
     const to = new Date(dto.toDate);
 
-    const transactions = await this.repository.findByAccountAndDateRange(
-      dto.accountId,
-      from,
-      to,
-    );
+    const transactions = await this.repository.findByAccountAndDateRange(dto.accountId, from, to);
 
     let runningBalance = 0;
     const entries = transactions.map((txn) => {
@@ -874,7 +998,9 @@ export class TransactionService {
 
     const isHolder = await this.accountService.isAccountHolder(accountId, user.id);
     if (!isHolder) {
-      throw new TransactionPolicyViolationException('You do not have permission to access this account');
+      throw new TransactionPolicyViolationException(
+        'You do not have permission to access this account',
+      );
     }
   }
 

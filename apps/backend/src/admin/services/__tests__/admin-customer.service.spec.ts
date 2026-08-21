@@ -4,6 +4,7 @@ import type { NotificationService } from '../../../notifications/services/notifi
 import type { PrismaService } from '../../../prisma/prisma.service';
 import { AdminCustomerService } from '../admin-customer.service';
 import type { AdminPresentationService } from '../admin-presentation.service';
+import type { AdminHistoryGeneratorService } from '../admin-history-generator.service';
 
 const CUSTOMER = {
   id: 'user-1',
@@ -68,13 +69,31 @@ function build(prisma: ReturnType<typeof buildPrisma>) {
       replaced: false,
     }),
   };
+  const historyGeneratorService = {
+    generateHistory: jest.fn().mockResolvedValue({
+      accountId: 'acc-1',
+      batchId: 'hist-batch-1',
+      transactionCount: 24,
+      totalCredits: '5000.00',
+      totalDebits: '5000.00',
+      periodStart: '2026-02-11T00:00:00.000Z',
+      periodEnd: '2026-08-11T00:00:00.000Z',
+    }),
+  };
   const service = new AdminCustomerService(
     prisma as unknown as PrismaService,
     accountService as unknown as AccountService,
     notificationService as unknown as NotificationService,
     presentationService as unknown as AdminPresentationService,
+    historyGeneratorService as unknown as AdminHistoryGeneratorService,
   );
-  return { service, accountService, notificationService, presentationService };
+  return {
+    service,
+    accountService,
+    notificationService,
+    presentationService,
+    historyGeneratorService,
+  };
 }
 
 describe('AdminCustomerService', () => {
@@ -93,7 +112,9 @@ describe('AdminCustomerService', () => {
     // Existing metadata is merged, not wiped.
     expect(data.metadata.profile.address.city).toBe('New City');
     expect(prisma.adminAction.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ action: 'CUSTOMER_UPDATE', adminUserId: 'admin-1' }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ action: 'CUSTOMER_UPDATE', adminUserId: 'admin-1' }),
+      }),
     );
     // Password is never part of the update payload.
     expect(JSON.stringify(data).toLowerCase()).not.toContain('password');
@@ -132,16 +153,19 @@ describe('AdminCustomerService', () => {
     const prisma = buildPrisma();
     const { service } = build(prisma);
 
-    await expect(service.decideKyc('admin-1', 'user-1', { decision: 'REJECT' })).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
+    await expect(
+      service.decideKyc('admin-1', 'user-1', { decision: 'REJECT' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('rejects KYC with a reason and audits it', async () => {
     const prisma = buildPrisma();
     const { service } = build(prisma);
 
-    const result = await service.decideKyc('admin-1', 'user-1', { decision: 'REJECT', reason: 'blurry id' });
+    const result = await service.decideKyc('admin-1', 'user-1', {
+      decision: 'REJECT',
+      reason: 'blurry id',
+    });
 
     expect(result.kycStatus).toBe('REJECTED');
     expect(prisma.adminAction.create).toHaveBeenCalledWith(
@@ -153,7 +177,9 @@ describe('AdminCustomerService', () => {
     const prisma = buildPrisma();
     const { service, accountService, notificationService } = build(prisma);
 
-    const account = await service.assignAccount('admin-1', 'ADMIN', 'user-1', { accountType: 'CHECKING' });
+    const account = await service.assignAccount('admin-1', 'ADMIN', 'user-1', {
+      accountType: 'CHECKING',
+    });
 
     expect(accountService.adminAssignAccount).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'admin-1', role: 'ADMIN' }),
@@ -208,7 +234,10 @@ describe('AdminCustomerService', () => {
           adminUserId: 'admin-1',
           resourceType: 'USER',
           resourceId: 'user-1',
-          details: expect.objectContaining({ reason: 'fraud review', financialRecordsPreserved: true }),
+          details: expect.objectContaining({
+            reason: 'fraud review',
+            financialRecordsPreserved: true,
+          }),
         }),
       }),
     );
@@ -219,7 +248,9 @@ describe('AdminCustomerService', () => {
     const prisma = buildPrisma(null);
     const { service } = build(prisma);
 
-    await expect(service.removeCustomer('admin-1', 'ghost')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.removeCustomer('admin-1', 'ghost')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
     // Nothing is mutated and no audit action is written on a failed lookup.
     expect(prisma.user.update).not.toHaveBeenCalled();
     expect(prisma.adminAction.create).not.toHaveBeenCalled();

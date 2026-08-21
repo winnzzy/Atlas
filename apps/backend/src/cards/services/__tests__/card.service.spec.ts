@@ -35,11 +35,14 @@ describe('CardService', () => {
     }).compile();
 
     const service = module.get(CardService);
-    const card = await service.issueCard({ id: 'user-1' } as never, {
-      accountId: 'acc-1',
-      type: CardType.VIRTUAL_DEBIT,
-      nickname: 'Travel',
-    } as never);
+    const card = await service.issueCard(
+      { id: 'user-1' } as never,
+      {
+        accountId: 'acc-1',
+        type: CardType.VIRTUAL_DEBIT,
+        nickname: 'Travel',
+      } as never,
+    );
 
     expect(card.id).toBeDefined();
     expect(card.accountId).toBe('acc-1');
@@ -71,10 +74,13 @@ describe('CardService', () => {
     }).compile();
 
     const service = module.get(CardService);
-    const card = await service.issueCard({ id: 'user-77' } as never, {
-      accountId: 'acc-1',
-      type: CardType.VIRTUAL_DEBIT,
-    } as never);
+    const card = await service.issueCard(
+      { id: 'user-77' } as never,
+      {
+        accountId: 'acc-1',
+        type: CardType.VIRTUAL_DEBIT,
+      } as never,
+    );
 
     expect(card.cardholderName).toBe('WINNER NAMDI');
     expect(card.cardholderName).not.toContain('user-77');
@@ -102,10 +108,13 @@ describe('CardService', () => {
     }).compile();
 
     const service = module.get(CardService);
-    const card = await service.issueCard({ id: 'ffffffff-ffff-4fff-8fff-ffffffffffff' } as never, {
-      accountId: 'acc-1',
-      type: CardType.VIRTUAL_DEBIT,
-    } as never);
+    const card = await service.issueCard(
+      { id: 'ffffffff-ffff-4fff-8fff-ffffffffffff' } as never,
+      {
+        accountId: 'acc-1',
+        type: CardType.VIRTUAL_DEBIT,
+      } as never,
+    );
 
     expect(card.cardholderName).toBe('ATLAS CARDHOLDER');
     expect(card.cardholderName).not.toContain('ffff');
@@ -187,7 +196,9 @@ describe('CardService', () => {
 
     // The customer sees the now-active card, and approval moved no money.
     const owned = await service.searchCards(user, {} as never);
-    expect(owned.items.find((card) => card.id === application.id)?.status).toBe(CardStatus.ACTIVATED);
+    expect(owned.items.find((card) => card.id === application.id)?.status).toBe(
+      CardStatus.ACTIVATED,
+    );
     expect(transactionService.createTransaction).not.toHaveBeenCalled();
     expect(ledgerService.createHold).not.toHaveBeenCalled();
   });
@@ -258,7 +269,12 @@ describe('CardService', () => {
       { requiresApproval: true },
     );
 
-    const rejected = await service.rejectCardApplication(user, application.id, 'admin-1', 'Failed review');
+    const rejected = await service.rejectCardApplication(
+      user,
+      application.id,
+      'admin-1',
+      'Failed review',
+    );
     expect(rejected.status).toBe(CardStatus.CANCELLED);
     // A rejected application must not be approvable afterwards.
     await expect(service.approveCardApplication(user, application.id, 'admin-1')).rejects.toThrow();
@@ -266,12 +282,19 @@ describe('CardService', () => {
 
   it('authorizes a card transaction through ledger hold and transaction service', async () => {
     const accountService = {
-      findById: jest.fn().mockResolvedValue({ id: 'acc-2', status: 'ACTIVE', availableBalance: '1000.00', currentBalance: '1000.00' }),
+      findById: jest.fn().mockResolvedValue({
+        id: 'acc-2',
+        status: 'ACTIVE',
+        availableBalance: '1000.00',
+        currentBalance: '1000.00',
+      }),
       isAccountHolder: jest.fn().mockResolvedValue(true),
     };
 
     const transactionService = {
-      createTransaction: jest.fn().mockResolvedValue({ id: 'txn-1', metadata: { authorizationCode: 'A123456789' } }),
+      createTransaction: jest
+        .fn()
+        .mockResolvedValue({ id: 'txn-1', metadata: { authorizationCode: 'A123456789' } }),
       reverseTransaction: jest.fn(),
     };
 
@@ -297,15 +320,18 @@ describe('CardService', () => {
 
     const service = module.get(CardService);
 
-    const card = await service.issueCard({ id: 'user-2' } as never, {
-      accountId: 'acc-2',
-      type: CardType.VIRTUAL_DEBIT,
-      spendingControls: {
-        dailyLimit: '500.00',
-        monthlyLimit: '10000.00',
-        perTransactionLimit: '250.00',
-      },
-    } as never);
+    const card = await service.issueCard(
+      { id: 'user-2' } as never,
+      {
+        accountId: 'acc-2',
+        type: CardType.VIRTUAL_DEBIT,
+        spendingControls: {
+          dailyLimit: '500.00',
+          monthlyLimit: '10000.00',
+          perTransactionLimit: '250.00',
+        },
+      } as never,
+    );
 
     await service.activateCard({ id: 'user-2' } as never, card.id);
 
@@ -370,5 +396,77 @@ describe('CardService', () => {
     // Applying for a card touches neither a money transaction nor the ledger.
     expect(transactionService.createTransaction).not.toHaveBeenCalled();
     expect(ledgerService.createHold).not.toHaveBeenCalled();
+  });
+
+  describe('admin freeze cannot be overridden by the customer', () => {
+    async function buildActivatedCard() {
+      const accountService = {
+        findById: jest.fn().mockResolvedValue({ id: 'acc-freeze', status: 'ACTIVE' }),
+        isAccountHolder: jest.fn().mockResolvedValue(true),
+      };
+
+      const module = await Test.createTestingModule({
+        providers: [
+          CardService,
+          CardRepository,
+          { provide: PrismaService, useValue: createCardPrismaDouble() },
+          CardPolicy,
+          CardValidator,
+          CardMapper,
+          { provide: AccountService, useValue: accountService },
+          { provide: TransactionService, useValue: { createTransaction: jest.fn() } },
+          { provide: LedgerService, useValue: { createHold: jest.fn(), releaseHold: jest.fn() } },
+          { provide: EventEmitter2, useValue: { emit: jest.fn() } },
+        ],
+      }).compile();
+
+      const service = module.get(CardService);
+      const customer = { id: 'user-freeze' } as never;
+      const admin = { id: 'admin-1', role: 'ADMIN' } as never;
+
+      const card = await service.issueCard(customer, {
+        accountId: 'acc-freeze',
+        type: CardType.VIRTUAL_DEBIT,
+      } as never);
+      await service.activateCard(customer, card.id);
+      return { service, customer, admin, cardId: card.id };
+    }
+
+    it('rejects a customer unfreeze on a card an admin froze, with a generic message', async () => {
+      const { service, customer, admin, cardId } = await buildActivatedCard();
+
+      const frozen = await service.freezeCard(admin, cardId, 'internal review');
+      expect(frozen.status).toBe(CardStatus.FROZEN);
+
+      await expect(service.unfreezeCard(customer, cardId)).rejects.toThrow(
+        'This card is temporarily unavailable. Contact support.',
+      );
+    });
+
+    it('lets an admin clear their own freeze', async () => {
+      const { service, admin, cardId } = await buildActivatedCard();
+
+      await service.freezeCard(admin, cardId, 'internal review');
+      const unfrozen = await service.unfreezeCard(admin, cardId);
+      expect(unfrozen.status).toBe(CardStatus.ACTIVATED);
+    });
+
+    it('still lets a customer freeze and unfreeze their own card freely', async () => {
+      const { service, customer, cardId } = await buildActivatedCard();
+
+      const frozen = await service.freezeCard(customer, cardId, 'Frozen by cardholder');
+      expect(frozen.status).toBe(CardStatus.FROZEN);
+
+      const unfrozen = await service.unfreezeCard(customer, cardId);
+      expect(unfrozen.status).toBe(CardStatus.ACTIVATED);
+    });
+
+    it('never exposes who froze the card on the customer-facing response', async () => {
+      const { service, admin, cardId } = await buildActivatedCard();
+
+      const frozen = await service.freezeCard(admin, cardId, 'internal review');
+      expect(JSON.stringify(frozen)).not.toMatch(/admin/i);
+      expect(frozen).not.toHaveProperty('frozenBy');
+    });
   });
 });

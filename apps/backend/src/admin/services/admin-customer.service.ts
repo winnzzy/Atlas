@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { KycStatus, NotificationType, UserStatus } from '@prisma/client';
 import type { AuthenticatedUser } from '../../accounts/policies/account.policy';
@@ -13,6 +18,10 @@ import {
   type GeneratePresentationDto,
   type PresentationStatus,
 } from './admin-presentation.service';
+import {
+  AdminHistoryGeneratorService,
+  type GenerateHistoryInput,
+} from './admin-history-generator.service';
 
 /**
  * All customer/KYC/account admin mutations funnel through here so that every
@@ -31,6 +40,7 @@ export class AdminCustomerService {
     private readonly accountService: AccountService,
     private readonly notificationService: NotificationService,
     private readonly presentationService: AdminPresentationService,
+    private readonly historyGeneratorService: AdminHistoryGeneratorService,
   ) {}
 
   private adminActor(adminId: string, role: AdminRole): AuthenticatedUser {
@@ -223,11 +233,15 @@ export class AdminCustomerService {
     dto: AssignAccountDto,
   ): Promise<AccountResponseDto> {
     await this.requireUser(userId);
-    const account = await this.accountService.adminAssignAccount(this.adminActor(adminId, role), userId, {
-      accountType: dto.accountType,
-      currency: dto.currency,
-      nickname: dto.nickname,
-    });
+    const account = await this.accountService.adminAssignAccount(
+      this.adminActor(adminId, role),
+      userId,
+      {
+        accountType: dto.accountType,
+        currency: dto.currency,
+        nickname: dto.nickname,
+      },
+    );
 
     await this.recordAction(adminId, 'ACCOUNT_ASSIGN', 'ACCOUNT', account.id, {
       userId,
@@ -299,7 +313,10 @@ export class AdminCustomerService {
     role: AdminRole,
     accountId: string,
   ): Promise<AccountResponseDto> {
-    const account = await this.accountService.releaseRestriction(this.adminActor(adminId, role), accountId);
+    const account = await this.accountService.releaseRestriction(
+      this.adminActor(adminId, role),
+      accountId,
+    );
 
     await this.recordAction(adminId, 'ACCOUNT_RESTRICTION_RELEASE', 'ACCOUNT', accountId, {});
 
@@ -423,6 +440,35 @@ export class AdminCustomerService {
         generatedAt: new Date().toISOString(),
       },
     );
+
+    return { ...result };
+  }
+
+  /**
+   * Backfill additional generated transaction history for a customer account
+   * (Feature 3). Balance-neutral by construction (see
+   * `AdminHistoryGeneratorService`); audited here like every other admin
+   * money-adjacent action.
+   */
+  async generateHistory(
+    adminId: string,
+    userId: string,
+    accountId: string,
+    dto: GenerateHistoryInput,
+  ): Promise<Record<string, unknown>> {
+    await this.requireUser(userId);
+    const result = await this.historyGeneratorService.generateHistory(userId, accountId, dto);
+
+    await this.recordAction(adminId, 'HISTORY_GENERATE', 'ACCOUNT', accountId, {
+      userId,
+      accountId,
+      batchId: result.batchId,
+      transactionCount: result.transactionCount,
+      totalCredits: result.totalCredits,
+      totalDebits: result.totalDebits,
+      periodStart: result.periodStart,
+      periodEnd: result.periodEnd,
+    });
 
     return { ...result };
   }

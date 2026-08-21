@@ -11,7 +11,15 @@ import {
 } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../../prisma/prisma.service';
-import type { CardDeclineReason, CardNetwork, CardSpendingCategory, CardStatus, CardTransactionStatus, CardTransactionType, CardType } from '../enums/card.enums';
+import type {
+  CardDeclineReason,
+  CardNetwork,
+  CardSpendingCategory,
+  CardStatus,
+  CardTransactionStatus,
+  CardTransactionType,
+  CardType,
+} from '../enums/card.enums';
 
 export interface CardLimitRecord {
   dailyLimit?: string;
@@ -56,6 +64,14 @@ export interface CardRecord {
   atmEnabled: boolean;
   frozenAt?: Date;
   freezeReason?: string;
+  /**
+   * Who froze the card. An 'ADMIN' freeze can only be cleared by an admin —
+   * the customer's own unfreeze call is rejected while this is set. Not part
+   * of any customer-facing DTO; stripped out before the response ever reaches
+   * the customer, and stored alongside the other non-columned card fields
+   * (nickname, spendingControls, ...) rather than as a new Prisma column.
+   */
+  frozenBy?: 'CUSTOMER' | 'ADMIN';
   activatedAt?: Date;
   closedAt?: Date;
   isDemo: boolean;
@@ -178,7 +194,11 @@ export class CardRepository {
     const data = this.toCardData(card);
     const row = await this.prisma.card.upsert({
       where: { id: card.id },
-      create: { id: card.id, createdAt: card.createdAt ?? new Date(), ...data } as Prisma.CardUncheckedCreateInput,
+      create: {
+        id: card.id,
+        createdAt: card.createdAt ?? new Date(),
+        ...data,
+      } as Prisma.CardUncheckedCreateInput,
       update: data as Prisma.CardUncheckedUpdateInput,
     });
     return this.toCardRecord(row);
@@ -191,7 +211,9 @@ export class CardRepository {
 
   async findCardByToken(cardToken: string): Promise<CardRecord | null> {
     const rows = await this.prisma.card.findMany({ where: { deletedAt: null } });
-    const match = rows.map((row) => this.toCardRecord(row)).find((card) => card.cardToken === cardToken);
+    const match = rows
+      .map((row) => this.toCardRecord(row))
+      .find((card) => card.cardToken === cardToken);
     return match ?? null;
   }
 
@@ -199,7 +221,9 @@ export class CardRepository {
     const rows = await this.prisma.card.findMany({ where: { deletedAt: null } });
     const match = rows
       .map((row) => this.toCardRecord(row))
-      .find((card) => card.maskedNumber === maskedNumber || card.maskedNumber.includes(maskedNumber));
+      .find(
+        (card) => card.maskedNumber === maskedNumber || card.maskedNumber.includes(maskedNumber),
+      );
     return match ?? null;
   }
 
@@ -238,7 +262,9 @@ export class CardRepository {
   }
 
   async saveVirtualCard(virtualCard: VirtualCardRecord): Promise<VirtualCardRecord> {
-    const existing = await this.prisma.virtualCard.findFirst({ where: { cardId: virtualCard.cardId } });
+    const existing = await this.prisma.virtualCard.findFirst({
+      where: { cardId: virtualCard.cardId },
+    });
     const data = {
       virtualNumber: virtualCard.virtualNumber,
       expiryMonth: virtualCard.expiryMonth,
@@ -252,7 +278,12 @@ export class CardRepository {
     const row = existing
       ? await this.prisma.virtualCard.update({ where: { id: existing.id }, data })
       : await this.prisma.virtualCard.create({
-          data: { id: virtualCard.id, cardId: virtualCard.cardId, createdAt: virtualCard.createdAt ?? new Date(), ...data },
+          data: {
+            id: virtualCard.id,
+            cardId: virtualCard.cardId,
+            createdAt: virtualCard.createdAt ?? new Date(),
+            ...data,
+          },
         });
     return this.toVirtualRecord(row);
   }
@@ -266,7 +297,11 @@ export class CardRepository {
     const data = this.toTransactionData(transaction);
     const row = await this.prisma.cardTransaction.upsert({
       where: { id: transaction.id },
-      create: { id: transaction.id, createdAt: transaction.createdAt ?? new Date(), ...data } as Prisma.CardTransactionUncheckedCreateInput,
+      create: {
+        id: transaction.id,
+        createdAt: transaction.createdAt ?? new Date(),
+        ...data,
+      } as Prisma.CardTransactionUncheckedCreateInput,
       update: data as Prisma.CardTransactionUncheckedUpdateInput,
     });
     return this.toTransactionRecord(row);
@@ -277,8 +312,12 @@ export class CardRepository {
     return row ? this.toTransactionRecord(row) : null;
   }
 
-  async findTransactionByLedgerTransactionId(ledgerTransactionId: string): Promise<CardTransactionRecord | null> {
-    const row = await this.prisma.cardTransaction.findFirst({ where: { transactionId: ledgerTransactionId } });
+  async findTransactionByLedgerTransactionId(
+    ledgerTransactionId: string,
+  ): Promise<CardTransactionRecord | null> {
+    const row = await this.prisma.cardTransaction.findFirst({
+      where: { transactionId: ledgerTransactionId },
+    });
     return row ? this.toTransactionRecord(row) : null;
   }
 
@@ -287,7 +326,11 @@ export class CardRepository {
     return rows.map((row) => this.toTransactionRecord(row));
   }
 
-  async findTransactionsByDateRange(cardId: string, from: Date, to: Date): Promise<CardTransactionRecord[]> {
+  async findTransactionsByDateRange(
+    cardId: string,
+    from: Date,
+    to: Date,
+  ): Promise<CardTransactionRecord[]> {
     return (await this.findTransactionsByCardId(cardId)).filter(
       (transaction) => transaction.createdAt >= from && transaction.createdAt <= to,
     );
@@ -301,7 +344,11 @@ export class CardRepository {
     return total.toFixed(2);
   }
 
-  async countTransactionsByCardIdAndDateRange(cardId: string, from: Date, to: Date): Promise<number> {
+  async countTransactionsByCardIdAndDateRange(
+    cardId: string,
+    from: Date,
+    to: Date,
+  ): Promise<number> {
     return (await this.findTransactionsByDateRange(cardId, from, to)).length;
   }
 
@@ -313,7 +360,9 @@ export class CardRepository {
 
     if (params.cardNumber) {
       const cardNumber = params.cardNumber;
-      items = items.filter((card) => card.maskedNumber.includes(cardNumber) || card.cardToken.includes(cardNumber));
+      items = items.filter(
+        (card) => card.maskedNumber.includes(cardNumber) || card.cardToken.includes(cardNumber),
+      );
     }
     if (params.status) {
       items = items.filter((card) => card.status === params.status);
@@ -329,7 +378,13 @@ export class CardRepository {
       const cardsWithTransactions = new Set<string>();
       for (const transaction of transactions) {
         if (params.transactionId && transaction.transactionId !== params.transactionId) continue;
-        if (params.merchantName && !(transaction.merchantName ?? '').toLowerCase().includes(params.merchantName.toLowerCase())) continue;
+        if (
+          params.merchantName &&
+          !(transaction.merchantName ?? '')
+            .toLowerCase()
+            .includes(params.merchantName.toLowerCase())
+        )
+          continue;
         if (params.fromDate && transaction.createdAt < params.fromDate) continue;
         if (params.toDate && transaction.createdAt > params.toDate) continue;
         cardsWithTransactions.add(transaction.cardId);
@@ -340,7 +395,9 @@ export class CardRepository {
     return this.paginate(items, params.limit, params.cursor);
   }
 
-  async searchTransactions(params: CardTransactionSearchParams): Promise<CardTransactionSearchResult> {
+  async searchTransactions(
+    params: CardTransactionSearchParams,
+  ): Promise<CardTransactionSearchResult> {
     const rows = await this.prisma.cardTransaction.findMany({
       where: { ...(params.cardId ? { cardId: params.cardId } : {}) },
     });
@@ -350,17 +407,32 @@ export class CardRepository {
     if (params.status) items = items.filter((transaction) => transaction.status === params.status);
     if (params.merchantName) {
       const merchantName = params.merchantName.toLowerCase();
-      items = items.filter((transaction) => (transaction.merchantName ?? '').toLowerCase().includes(merchantName));
+      items = items.filter((transaction) =>
+        (transaction.merchantName ?? '').toLowerCase().includes(merchantName),
+      );
     }
-    if (params.transactionId) items = items.filter((transaction) => transaction.transactionId === params.transactionId);
-    if (params.fromDate) items = items.filter((transaction) => transaction.createdAt >= params.fromDate!);
-    if (params.toDate) items = items.filter((transaction) => transaction.createdAt <= params.toDate!);
+    if (params.transactionId)
+      items = items.filter((transaction) => transaction.transactionId === params.transactionId);
+    if (params.fromDate) {
+      const fromDate = params.fromDate;
+      items = items.filter((transaction) => transaction.createdAt >= fromDate);
+    }
+    if (params.toDate) {
+      const toDate = params.toDate;
+      items = items.filter((transaction) => transaction.createdAt <= toDate);
+    }
 
     if (params.accountId || params.customerId) {
-      const cards = (await this.prisma.card.findMany({ where: { deletedAt: null } })).map((row) => this.toCardRecord(row));
+      const cards = (await this.prisma.card.findMany({ where: { deletedAt: null } })).map((row) =>
+        this.toCardRecord(row),
+      );
       const accountCardIds = new Set(
         cards
-          .filter((card) => (!params.accountId || card.accountId === params.accountId) && (!params.customerId || card.customerId === params.customerId))
+          .filter(
+            (card) =>
+              (!params.accountId || card.accountId === params.accountId) &&
+              (!params.customerId || card.customerId === params.customerId),
+          )
           .map((card) => card.id),
       );
       items = items.filter((transaction) => accountCardIds.has(transaction.cardId));
@@ -384,7 +456,9 @@ export class CardRepository {
     limit: number,
     cursor?: string,
   ): { items: T[]; nextCursor?: string; totalCount: number } {
-    let items = [...rows].sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+    let items = [...rows].sort(
+      (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
+    );
     const totalCount = items.length;
     if (cursor) {
       const cursorIndex = items.findIndex((item) => item.id === cursor);
@@ -392,10 +466,17 @@ export class CardRepository {
     }
     const page = items.slice(0, limit);
     const lastItem = page.at(-1);
-    return { items: page, nextCursor: page.length === limit && lastItem ? lastItem.id : undefined, totalCount };
+    return {
+      items: page,
+      nextCursor: page.length === limit && lastItem ? lastItem.id : undefined,
+      totalCount,
+    };
   }
 
-  private splitMetadata(json: unknown): { metadata?: Record<string, string>; ext: Record<string, unknown> } {
+  private splitMetadata(json: unknown): {
+    metadata?: Record<string, string>;
+    ext: Record<string, unknown>;
+  } {
     const obj = json && typeof json === 'object' ? { ...(json as Record<string, unknown>) } : {};
     const ext = (obj[EXT_KEY] as Record<string, unknown>) ?? {};
     delete obj[EXT_KEY];
@@ -413,6 +494,7 @@ export class CardRepository {
       spendingControls: card.spendingControls,
       replacementCardId: card.replacementCardId,
       replacesCardId: card.replacesCardId,
+      frozenBy: card.frozenBy,
     };
     const metadata = { ...(card.metadata ?? {}), [EXT_KEY]: ext };
     return {
@@ -479,6 +561,7 @@ export class CardRepository {
       atmEnabled: Boolean(row.atmEnabled),
       frozenAt: (row.frozenAt as Date) ?? undefined,
       freezeReason: (row.freezeReason as string) ?? undefined,
+      frozenBy: (ext.frozenBy as CardRecord['frozenBy']) ?? undefined,
       activatedAt: (row.activatedAt as Date) ?? undefined,
       closedAt: (row.closedAt as Date) ?? undefined,
       isDemo: Boolean(row.isDemo),
@@ -537,7 +620,9 @@ export class CardRepository {
       isOnline: transaction.isOnline,
       isInternational: transaction.isInternational,
       isContactless: transaction.isContactless,
-      declineReason: transaction.declineReason ? (transaction.declineReason as unknown as PrismaDeclineReason) : null,
+      declineReason: transaction.declineReason
+        ? (transaction.declineReason as unknown as PrismaDeclineReason)
+        : null,
       authorizationCode: transaction.authorizationCode ?? null,
       metadata: metadata as Prisma.InputJsonValue,
     };

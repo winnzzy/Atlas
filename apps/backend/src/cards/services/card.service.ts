@@ -9,10 +9,22 @@ import { TransactionType } from '../../transactions/enums/transaction-type.enum'
 import type { CreateHoldDto, ReleaseHoldDto } from '../../ledger/dto/hold.dto';
 import { CardMapper } from '../mappers/card.mapper';
 import { CardPolicy } from '../policies/card.policy';
-import { CardRepository, type CardRecord, type CardTransactionRecord } from '../repositories/card.repository';
+import {
+  CardRepository,
+  type CardRecord,
+  type CardTransactionRecord,
+} from '../repositories/card.repository';
 import { CardValidator } from '../validators/card.validator';
 import { CARD_EVENT_NAMES, type CardEventBase } from '../events/card.events';
-import { CardDeclineReason, CardNetwork, CardSpendingCategory, CardStatus, CardTransactionStatus, CardType, TERMINAL_CARD_STATUSES } from '../enums/card.enums';
+import {
+  CardDeclineReason,
+  CardNetwork,
+  CardSpendingCategory,
+  CardStatus,
+  CardTransactionStatus,
+  CardType,
+  TERMINAL_CARD_STATUSES,
+} from '../enums/card.enums';
 import type {
   AuthorizeCardTransactionDto,
   CardResponseDto,
@@ -28,13 +40,24 @@ import type {
   SearchCardsDto,
   UpdateCardDto,
 } from '../dto/cards.dto';
-import { CardNotFoundException, CardPolicyViolationException, CardTransactionNotFoundException, CardValidationException } from '../exceptions/card-domain.exception';
+import {
+  CardNotFoundException,
+  CardPolicyViolationException,
+  CardTransactionNotFoundException,
+  CardValidationException,
+} from '../exceptions/card-domain.exception';
 import type { AuthenticatedUser } from '../../accounts/policies/account.policy';
 
 @Injectable()
 export class CardService {
   private readonly logger = new Logger(CardService.name);
-  private readonly auditLog: Array<{ cardId: string; action: string; performedBy: string; timestamp: Date; details?: Record<string, string> }> = [];
+  private readonly auditLog: Array<{
+    cardId: string;
+    action: string;
+    performedBy: string;
+    timestamp: Date;
+    details?: Record<string, string>;
+  }> = [];
 
   constructor(
     @Inject(AccountService) private readonly accountService: AccountService,
@@ -59,7 +82,9 @@ export class CardService {
     }
 
     if (!(await this.accountService.isAccountHolder(dto.accountId, user.id))) {
-      throw new CardPolicyViolationException('You do not have permission to issue a card for this account');
+      throw new CardPolicyViolationException(
+        'You do not have permission to issue a card for this account',
+      );
     }
 
     const existingCardCount = await this.repository.countCardsByAccountId(dto.accountId);
@@ -121,7 +146,14 @@ export class CardService {
     };
 
     await this.repository.saveCard(card);
-    await this.repository.saveHolder({ id: randomUUID(), cardId: card.id, userId: user.id, role: 'PRIMARY', createdAt: new Date(), updatedAt: new Date() });
+    await this.repository.saveHolder({
+      id: randomUUID(),
+      cardId: card.id,
+      userId: user.id,
+      role: 'PRIMARY',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
 
     if (isVirtual) {
       await this.repository.saveVirtualCard({
@@ -133,7 +165,8 @@ export class CardService {
         isActive: true,
         usageLimit: dto.type === CardType.SINGLE_USE_VIRTUAL ? 1 : undefined,
         usageCount: 0,
-        merchantRestriction: dto.type === CardType.MERCHANT_LOCKED_VIRTUAL ? dto.nickname : undefined,
+        merchantRestriction:
+          dto.type === CardType.MERCHANT_LOCKED_VIRTUAL ? dto.nickname : undefined,
         expiresAt: new Date(expiry.year, expiry.month, 0),
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -173,14 +206,25 @@ export class CardService {
       cursor: dto.cursor,
     });
 
-    return this.mapper.toCardSearchResponse(result.items, result.totalCount, Number(dto.limit ?? 50), result.nextCursor);
+    return this.mapper.toCardSearchResponse(
+      result.items,
+      result.totalCount,
+      Number(dto.limit ?? 50),
+      result.nextCursor,
+    );
   }
 
-  async updateCard(user: AuthenticatedUser, cardId: string, dto: UpdateCardDto): Promise<CardResponseDto> {
+  async updateCard(
+    user: AuthenticatedUser,
+    cardId: string,
+    dto: UpdateCardDto,
+  ): Promise<CardResponseDto> {
     const card = await this.findCardOrThrow(cardId);
     await this.ensureOwnership(user, card);
     if (card.status === CardStatus.CANCELLED || card.status === CardStatus.EXPIRED) {
-      throw new CardPolicyViolationException(`Card ${card.id} cannot be updated in status ${card.status}`);
+      throw new CardPolicyViolationException(
+        `Card ${card.id} cannot be updated in status ${card.status}`,
+      );
     }
 
     card.nickname = dto.nickname ?? card.nickname;
@@ -202,12 +246,22 @@ export class CardService {
   async activateCard(user: AuthenticatedUser, cardId: string): Promise<CardResponseDto> {
     const card = await this.findCardOrThrow(cardId);
     await this.ensureOwnership(user, card);
-    this.ensureTransition(card, [CardStatus.PENDING_VERIFICATION, CardStatus.ISSUED, CardStatus.REQUESTED]);
+    this.ensureTransition(card, [
+      CardStatus.PENDING_VERIFICATION,
+      CardStatus.ISSUED,
+      CardStatus.REQUESTED,
+    ]);
     card.status = CardStatus.ACTIVATED;
     card.activatedAt = new Date();
     await this.repository.updateCard(card);
     this.audit('ACTIVATE', card, user.id);
-    this.emit(CARD_EVENT_NAMES.ACTIVATED, { cardId: card.id, accountId: card.accountId, customerId: card.customerId, performedBy: user.id, status: card.status });
+    this.emit(CARD_EVENT_NAMES.ACTIVATED, {
+      cardId: card.id,
+      accountId: card.accountId,
+      customerId: card.customerId,
+      performedBy: user.id,
+      status: card.status,
+    });
     return this.mapper.toCardResponse(card);
   }
 
@@ -218,7 +272,11 @@ export class CardService {
    * PENDING_VERIFICATION (e.g. an admin-issued physical card) can be approved,
    * so re-approving never raises an invalid-transition error.
    */
-  async approveCardApplication(user: AuthenticatedUser, cardId: string, reviewerId: string): Promise<CardResponseDto> {
+  async approveCardApplication(
+    user: AuthenticatedUser,
+    cardId: string,
+    reviewerId: string,
+  ): Promise<CardResponseDto> {
     const card = await this.findCardOrThrow(cardId);
     this.ensureTransition(card, [CardStatus.REQUESTED, CardStatus.PENDING_VERIFICATION]);
     card.status = CardStatus.ACTIVATED;
@@ -238,7 +296,12 @@ export class CardService {
   }
 
   /** Rejects a pending card application, recording why. */
-  async rejectCardApplication(user: AuthenticatedUser, cardId: string, reviewerId: string, reason?: string): Promise<CardResponseDto> {
+  async rejectCardApplication(
+    user: AuthenticatedUser,
+    cardId: string,
+    reviewerId: string,
+    reason?: string,
+  ): Promise<CardResponseDto> {
     const card = await this.findCardOrThrow(cardId);
     this.ensureTransition(card, [CardStatus.REQUESTED, CardStatus.PENDING_VERIFICATION]);
     card.status = CardStatus.CANCELLED;
@@ -259,16 +322,28 @@ export class CardService {
     return this.mapper.toCardResponse(card);
   }
 
-  async freezeCard(user: AuthenticatedUser, cardId: string, reason?: string): Promise<CardResponseDto> {
+  async freezeCard(
+    user: AuthenticatedUser,
+    cardId: string,
+    reason?: string,
+  ): Promise<CardResponseDto> {
     const card = await this.findCardOrThrow(cardId);
     await this.ensureOwnership(user, card);
     this.ensureTransition(card, [CardStatus.ACTIVATED, CardStatus.ISSUED]);
     card.status = CardStatus.FROZEN;
     card.frozenAt = new Date();
     card.freezeReason = reason;
+    card.frozenBy = this.isAdminActor(user) ? 'ADMIN' : 'CUSTOMER';
     await this.repository.updateCard(card);
     this.audit('FREEZE', card, user.id, reason ? { reason } : undefined);
-    this.emit(CARD_EVENT_NAMES.FROZEN, { cardId: card.id, accountId: card.accountId, customerId: card.customerId, performedBy: user.id, status: card.status, reason });
+    this.emit(CARD_EVENT_NAMES.FROZEN, {
+      cardId: card.id,
+      accountId: card.accountId,
+      customerId: card.customerId,
+      performedBy: user.id,
+      status: card.status,
+      reason,
+    });
     return this.mapper.toCardResponse(card);
   }
 
@@ -276,16 +351,35 @@ export class CardService {
     const card = await this.findCardOrThrow(cardId);
     await this.ensureOwnership(user, card);
     this.ensureTransition(card, [CardStatus.FROZEN]);
+    // A freeze an admin placed can only be cleared by an admin. The customer
+    // sees the card as simply unavailable — nothing here reveals that an
+    // admin, rather than a system rule, is holding it frozen.
+    if (card.frozenBy === 'ADMIN' && !this.isAdminActor(user)) {
+      throw new CardPolicyViolationException(
+        'This card is temporarily unavailable. Contact support.',
+      );
+    }
     card.status = CardStatus.ACTIVATED;
     card.frozenAt = undefined;
     card.freezeReason = undefined;
+    card.frozenBy = undefined;
     await this.repository.updateCard(card);
     this.audit('UNFREEZE', card, user.id);
-    this.emit(CARD_EVENT_NAMES.UNFROZEN, { cardId: card.id, accountId: card.accountId, customerId: card.customerId, performedBy: user.id, status: card.status });
+    this.emit(CARD_EVENT_NAMES.UNFROZEN, {
+      cardId: card.id,
+      accountId: card.accountId,
+      customerId: card.customerId,
+      performedBy: user.id,
+      status: card.status,
+    });
     return this.mapper.toCardResponse(card);
   }
 
-  async lockCard(user: AuthenticatedUser, cardId: string, reason?: string): Promise<CardResponseDto> {
+  async lockCard(
+    user: AuthenticatedUser,
+    cardId: string,
+    reason?: string,
+  ): Promise<CardResponseDto> {
     const card = await this.findCardOrThrow(cardId);
     await this.ensureOwnership(user, card);
     this.ensureTransition(card, [CardStatus.ACTIVATED, CardStatus.FROZEN]);
@@ -293,7 +387,14 @@ export class CardService {
     card.freezeReason = reason;
     await this.repository.updateCard(card);
     this.audit('LOCK', card, user.id, reason ? { reason } : undefined);
-    this.emit(CARD_EVENT_NAMES.LOCKED, { cardId: card.id, accountId: card.accountId, customerId: card.customerId, performedBy: user.id, status: card.status, reason });
+    this.emit(CARD_EVENT_NAMES.LOCKED, {
+      cardId: card.id,
+      accountId: card.accountId,
+      customerId: card.customerId,
+      performedBy: user.id,
+      status: card.status,
+      reason,
+    });
     return this.mapper.toCardResponse(card);
   }
 
@@ -304,11 +405,21 @@ export class CardService {
     card.status = CardStatus.ACTIVATED;
     await this.repository.updateCard(card);
     this.audit('UNLOCK', card, user.id);
-    this.emit(CARD_EVENT_NAMES.UNLOCKED, { cardId: card.id, accountId: card.accountId, customerId: card.customerId, performedBy: user.id, status: card.status });
+    this.emit(CARD_EVENT_NAMES.UNLOCKED, {
+      cardId: card.id,
+      accountId: card.accountId,
+      customerId: card.customerId,
+      performedBy: user.id,
+      status: card.status,
+    });
     return this.mapper.toCardResponse(card);
   }
 
-  async cancelCard(user: AuthenticatedUser, cardId: string, reason?: string): Promise<CardResponseDto> {
+  async cancelCard(
+    user: AuthenticatedUser,
+    cardId: string,
+    reason?: string,
+  ): Promise<CardResponseDto> {
     const card = await this.findCardOrThrow(cardId);
     await this.ensureOwnership(user, card);
     if (TERMINAL_CARD_STATUSES.has(card.status)) {
@@ -318,7 +429,14 @@ export class CardService {
     card.closedAt = new Date();
     await this.repository.updateCard(card);
     this.audit('CANCEL', card, user.id, reason ? { reason } : undefined);
-    this.emit(CARD_EVENT_NAMES.CANCELLED, { cardId: card.id, accountId: card.accountId, customerId: card.customerId, performedBy: user.id, status: card.status, reason });
+    this.emit(CARD_EVENT_NAMES.CANCELLED, {
+      cardId: card.id,
+      accountId: card.accountId,
+      customerId: card.customerId,
+      performedBy: user.id,
+      status: card.status,
+      reason,
+    });
     return this.mapper.toCardResponse(card);
   }
 
@@ -350,11 +468,22 @@ export class CardService {
     await this.repository.updateCard(card);
 
     this.audit('REISSUE', card, user.id, { replacementCardId: replacementCard.id });
-    this.emit(CARD_EVENT_NAMES.REISSUED, { cardId: card.id, accountId: card.accountId, customerId: card.customerId, performedBy: user.id, status: card.status, metadata: { replacementCardId: replacementCard.id } });
+    this.emit(CARD_EVENT_NAMES.REISSUED, {
+      cardId: card.id,
+      accountId: card.accountId,
+      customerId: card.customerId,
+      performedBy: user.id,
+      status: card.status,
+      metadata: { replacementCardId: replacementCard.id },
+    });
     return this.mapper.toCardResponse(replacementCard);
   }
 
-  async changePin(user: AuthenticatedUser, cardId: string, dto: ChangePinDto): Promise<CardResponseDto> {
+  async changePin(
+    user: AuthenticatedUser,
+    cardId: string,
+    dto: ChangePinDto,
+  ): Promise<CardResponseDto> {
     const card = await this.findCardOrThrow(cardId);
     await this.ensureOwnership(user, card);
     if (!this.validator.validatePin(dto.pin)) {
@@ -367,11 +496,17 @@ export class CardService {
     return this.mapper.toCardResponse(card);
   }
 
-  async regenerateCvv(user: AuthenticatedUser, cardId: string, _dto: RegenerateCvvDto): Promise<CardResponseDto> {
+  async regenerateCvv(
+    user: AuthenticatedUser,
+    cardId: string,
+    _dto: RegenerateCvvDto,
+  ): Promise<CardResponseDto> {
     const card = await this.findCardOrThrow(cardId);
     await this.ensureOwnership(user, card);
     if (card.type === CardType.PHYSICAL_DEBIT) {
-      throw new CardPolicyViolationException('CVV regeneration is only available for virtual cards');
+      throw new CardPolicyViolationException(
+        'CVV regeneration is only available for virtual cards',
+      );
     }
     const cvv = this.validator.generateCvv();
     card.cvvHash = this.validator.hashValue(cvv);
@@ -380,7 +515,11 @@ export class CardService {
     return this.mapper.toCardResponse(card);
   }
 
-  async authorizeTransaction(user: AuthenticatedUser, cardId: string, dto: AuthorizeCardTransactionDto): Promise<CardTransactionResponseDto> {
+  async authorizeTransaction(
+    user: AuthenticatedUser,
+    cardId: string,
+    dto: AuthorizeCardTransactionDto,
+  ): Promise<CardTransactionResponseDto> {
     const card = await this.findCardOrThrow(cardId);
     await this.ensureOwnership(user, card);
     const account = await this.accountService.findById(card.accountId);
@@ -388,15 +527,24 @@ export class CardService {
       throw new CardValidationException(`Account ${card.accountId} not found`);
     }
 
-    const recentDaySpend = await this.repository.sumTransactionsByCardIdAndDateRange(card.id, this.startOfDay(), new Date());
-    const recentMonthSpend = await this.repository.sumTransactionsByCardIdAndDateRange(card.id, this.startOfMonth(), new Date());
+    const recentDaySpend = await this.repository.sumTransactionsByCardIdAndDateRange(
+      card.id,
+      this.startOfDay(),
+      new Date(),
+    );
+    const recentMonthSpend = await this.repository.sumTransactionsByCardIdAndDateRange(
+      card.id,
+      this.startOfMonth(),
+      new Date(),
+    );
     const policyResult = this.policy.canAuthorizeTransaction(card, dto.amount, {
       isOnline: dto.isOnline,
       isInternational: dto.isInternational,
       isContactless: dto.isContactless,
       merchantName: dto.merchantName,
       merchantCountry: dto.merchantCountry,
-      accountBalance: account.availableBalance?.toString?.() ?? account.currentBalance?.toString?.() ?? undefined,
+      accountBalance:
+        account.availableBalance?.toString?.() ?? account.currentBalance?.toString?.() ?? undefined,
       recentDaySpend,
       recentMonthSpend,
     });
@@ -449,7 +597,9 @@ export class CardService {
       isOnline: dto.isOnline ?? false,
       isInternational: dto.isInternational ?? false,
       isContactless: dto.isContactless ?? false,
-      authorizationCode: String(transaction.metadata?.authorizationCode ?? this.validator.generateToken('auth').slice(-10)),
+      authorizationCode: String(
+        transaction.metadata?.authorizationCode ?? this.validator.generateToken('auth').slice(-10),
+      ),
       metadata: dto.metadata,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -476,7 +626,10 @@ export class CardService {
     return this.mapper.toCardTransactionResponse(cardTransaction);
   }
 
-  async captureTransaction(user: AuthenticatedUser, cardTransactionId: string): Promise<CardTransactionResponseDto> {
+  async captureTransaction(
+    user: AuthenticatedUser,
+    cardTransactionId: string,
+  ): Promise<CardTransactionResponseDto> {
     const cardTransaction = await this.findTransactionOrThrow(cardTransactionId);
     const card = await this.findCardOrThrow(cardTransaction.cardId);
     await this.ensureOwnership(user, card);
@@ -501,7 +654,9 @@ export class CardService {
     });
 
     if (cardTransaction.holdId) {
-      await this.ledgerService.releaseHold(cardTransaction.holdId, { reason: 'Card capture settlement' } as ReleaseHoldDto);
+      await this.ledgerService.releaseHold(cardTransaction.holdId, {
+        reason: 'Card capture settlement',
+      } as ReleaseHoldDto);
     }
 
     cardTransaction.transactionId = transaction.id;
@@ -527,18 +682,39 @@ export class CardService {
     return this.mapper.toCardTransactionResponse(cardTransaction);
   }
 
-  async completeTransaction(user: AuthenticatedUser, cardTransactionId: string): Promise<CardTransactionResponseDto> {
+  async completeTransaction(
+    user: AuthenticatedUser,
+    cardTransactionId: string,
+  ): Promise<CardTransactionResponseDto> {
     const cardTransaction = await this.findTransactionOrThrow(cardTransactionId);
     const card = await this.findCardOrThrow(cardTransaction.cardId);
     await this.ensureOwnership(user, card);
     cardTransaction.status = CardTransactionStatus.COMPLETED;
     await this.repository.updateTransaction(cardTransaction);
     this.audit('COMPLETION', card, user.id, { transactionId: cardTransaction.transactionId ?? '' });
-    this.emit(CARD_EVENT_NAMES.COMPLETED, { cardId: card.id, accountId: card.accountId, customerId: card.customerId, cardTransactionId: cardTransaction.id, transactionId: cardTransaction.transactionId, holdId: cardTransaction.holdId, type: cardTransaction.type, status: cardTransaction.status, amount: cardTransaction.amount, currency: cardTransaction.currency, merchantName: cardTransaction.merchantName, authorizationCode: cardTransaction.authorizationCode, performedBy: user.id });
+    this.emit(CARD_EVENT_NAMES.COMPLETED, {
+      cardId: card.id,
+      accountId: card.accountId,
+      customerId: card.customerId,
+      cardTransactionId: cardTransaction.id,
+      transactionId: cardTransaction.transactionId,
+      holdId: cardTransaction.holdId,
+      type: cardTransaction.type,
+      status: cardTransaction.status,
+      amount: cardTransaction.amount,
+      currency: cardTransaction.currency,
+      merchantName: cardTransaction.merchantName,
+      authorizationCode: cardTransaction.authorizationCode,
+      performedBy: user.id,
+    });
     return this.mapper.toCardTransactionResponse(cardTransaction);
   }
 
-  async refundTransaction(user: AuthenticatedUser, cardTransactionId: string, dto: RefundCardTransactionDto): Promise<CardTransactionResponseDto> {
+  async refundTransaction(
+    user: AuthenticatedUser,
+    cardTransactionId: string,
+    dto: RefundCardTransactionDto,
+  ): Promise<CardTransactionResponseDto> {
     const cardTransaction = await this.findTransactionOrThrow(cardTransactionId);
     const card = await this.findCardOrThrow(cardTransaction.cardId);
     await this.ensureOwnership(user, card);
@@ -565,11 +741,29 @@ export class CardService {
     cardTransaction.status = CardTransactionStatus.REFUNDED;
     await this.repository.updateTransaction(cardTransaction);
     this.audit('REFUND', card, user.id, { transactionId: transaction.id });
-    this.emit(CARD_EVENT_NAMES.REFUNDED, { cardId: card.id, accountId: card.accountId, customerId: card.customerId, cardTransactionId: cardTransaction.id, transactionId: transaction.id, holdId: cardTransaction.holdId, type: cardTransaction.type, status: cardTransaction.status, amount: cardTransaction.amount, currency: cardTransaction.currency, merchantName: cardTransaction.merchantName, authorizationCode: cardTransaction.authorizationCode, performedBy: user.id });
+    this.emit(CARD_EVENT_NAMES.REFUNDED, {
+      cardId: card.id,
+      accountId: card.accountId,
+      customerId: card.customerId,
+      cardTransactionId: cardTransaction.id,
+      transactionId: transaction.id,
+      holdId: cardTransaction.holdId,
+      type: cardTransaction.type,
+      status: cardTransaction.status,
+      amount: cardTransaction.amount,
+      currency: cardTransaction.currency,
+      merchantName: cardTransaction.merchantName,
+      authorizationCode: cardTransaction.authorizationCode,
+      performedBy: user.id,
+    });
     return this.mapper.toCardTransactionResponse(cardTransaction);
   }
 
-  async reverseTransaction(user: AuthenticatedUser, cardTransactionId: string, dto: ReverseCardTransactionDto): Promise<CardTransactionResponseDto> {
+  async reverseTransaction(
+    user: AuthenticatedUser,
+    cardTransactionId: string,
+    dto: ReverseCardTransactionDto,
+  ): Promise<CardTransactionResponseDto> {
     const cardTransaction = await this.findTransactionOrThrow(cardTransactionId);
     const card = await this.findCardOrThrow(cardTransaction.cardId);
     await this.ensureOwnership(user, card);
@@ -579,21 +773,45 @@ export class CardService {
     }
 
     if (cardTransaction.transactionId) {
-      await this.transactionService.reverseTransaction(cardTransaction.transactionId, dto.reason ?? 'Card reversal', user.id);
+      await this.transactionService.reverseTransaction(
+        cardTransaction.transactionId,
+        dto.reason ?? 'Card reversal',
+        user.id,
+      );
     }
 
     if (cardTransaction.holdId && cardTransaction.status === CardTransactionStatus.AUTHORIZED) {
-      await this.ledgerService.releaseHold(cardTransaction.holdId, { reason: dto.reason ?? 'Card reversal' } as ReleaseHoldDto);
+      await this.ledgerService.releaseHold(cardTransaction.holdId, {
+        reason: dto.reason ?? 'Card reversal',
+      } as ReleaseHoldDto);
     }
 
     cardTransaction.status = CardTransactionStatus.REVERSED;
     await this.repository.updateTransaction(cardTransaction);
     this.audit('REVERSAL', card, user.id, { transactionId: cardTransaction.transactionId ?? '' });
-    this.emit(CARD_EVENT_NAMES.REVERSED, { cardId: card.id, accountId: card.accountId, customerId: card.customerId, cardTransactionId: cardTransaction.id, transactionId: cardTransaction.transactionId, holdId: cardTransaction.holdId, type: cardTransaction.type, status: cardTransaction.status, amount: cardTransaction.amount, currency: cardTransaction.currency, merchantName: cardTransaction.merchantName, authorizationCode: cardTransaction.authorizationCode, performedBy: user.id });
+    this.emit(CARD_EVENT_NAMES.REVERSED, {
+      cardId: card.id,
+      accountId: card.accountId,
+      customerId: card.customerId,
+      cardTransactionId: cardTransaction.id,
+      transactionId: cardTransaction.transactionId,
+      holdId: cardTransaction.holdId,
+      type: cardTransaction.type,
+      status: cardTransaction.status,
+      amount: cardTransaction.amount,
+      currency: cardTransaction.currency,
+      merchantName: cardTransaction.merchantName,
+      authorizationCode: cardTransaction.authorizationCode,
+      performedBy: user.id,
+    });
     return this.mapper.toCardTransactionResponse(cardTransaction);
   }
 
-  async chargebackTransaction(user: AuthenticatedUser, cardTransactionId: string, reason?: string): Promise<CardTransactionResponseDto> {
+  async chargebackTransaction(
+    user: AuthenticatedUser,
+    cardTransactionId: string,
+    reason?: string,
+  ): Promise<CardTransactionResponseDto> {
     const cardTransaction = await this.findTransactionOrThrow(cardTransactionId);
     const card = await this.findCardOrThrow(cardTransaction.cardId);
     await this.ensureOwnership(user, card);
@@ -605,11 +823,28 @@ export class CardService {
     };
     await this.repository.updateTransaction(cardTransaction);
     this.audit('CHARGEBACK', card, user.id, reason ? { reason } : undefined);
-    this.emit(CARD_EVENT_NAMES.CHARGEBACK, { cardId: card.id, accountId: card.accountId, customerId: card.customerId, cardTransactionId: cardTransaction.id, transactionId: cardTransaction.transactionId, holdId: cardTransaction.holdId, type: cardTransaction.type, status: cardTransaction.status, amount: cardTransaction.amount, currency: cardTransaction.currency, merchantName: cardTransaction.merchantName, authorizationCode: cardTransaction.authorizationCode, performedBy: user.id });
+    this.emit(CARD_EVENT_NAMES.CHARGEBACK, {
+      cardId: card.id,
+      accountId: card.accountId,
+      customerId: card.customerId,
+      cardTransactionId: cardTransaction.id,
+      transactionId: cardTransaction.transactionId,
+      holdId: cardTransaction.holdId,
+      type: cardTransaction.type,
+      status: cardTransaction.status,
+      amount: cardTransaction.amount,
+      currency: cardTransaction.currency,
+      merchantName: cardTransaction.merchantName,
+      authorizationCode: cardTransaction.authorizationCode,
+      performedBy: user.id,
+    });
     return this.mapper.toCardTransactionResponse(cardTransaction);
   }
 
-  async searchCardTransactions(user: AuthenticatedUser, dto: SearchCardTransactionsDto): Promise<CardTransactionSearchResponseDto> {
+  async searchCardTransactions(
+    user: AuthenticatedUser,
+    dto: SearchCardTransactionsDto,
+  ): Promise<CardTransactionSearchResponseDto> {
     const result = await this.repository.searchTransactions({
       cardId: dto.cardId,
       type: dto.type,
@@ -624,10 +859,19 @@ export class CardService {
       cursor: dto.cursor,
     });
 
-    return this.mapper.toCardTransactionSearchResponse(result.items, result.totalCount, Number(dto.limit ?? 50), result.nextCursor);
+    return this.mapper.toCardTransactionSearchResponse(
+      result.items,
+      result.totalCount,
+      Number(dto.limit ?? 50),
+      result.nextCursor,
+    );
   }
 
-  async listCardTransactions(user: AuthenticatedUser, cardId: string, dto: SearchCardTransactionsDto): Promise<CardTransactionSearchResponseDto> {
+  async listCardTransactions(
+    user: AuthenticatedUser,
+    cardId: string,
+    dto: SearchCardTransactionsDto,
+  ): Promise<CardTransactionSearchResponseDto> {
     const card = await this.findCardOrThrow(cardId);
     await this.ensureOwnership(user, card);
     return this.searchCardTransactions(user, { ...dto, cardId });
@@ -650,19 +894,35 @@ export class CardService {
   }
 
   private async ensureOwnership(user: AuthenticatedUser, card: CardRecord): Promise<void> {
-    const isOwner = card.customerId === user.id || (await this.accountService.isAccountHolder(card.accountId, user.id));
+    if (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') {
+      return;
+    }
+    const isOwner =
+      card.customerId === user.id ||
+      (await this.accountService.isAccountHolder(card.accountId, user.id));
     if (!isOwner) {
       throw new CardPolicyViolationException('You do not have permission to access this card');
     }
   }
 
+  private isAdminActor(user: AuthenticatedUser): boolean {
+    return user.role === 'ADMIN' || user.role === 'SUPER_ADMIN';
+  }
+
   private ensureTransition(card: CardRecord, allowedStatuses: CardStatus[]): void {
     if (!allowedStatuses.includes(card.status)) {
-      throw new CardPolicyViolationException(`Card ${card.id} cannot transition from ${card.status}`);
+      throw new CardPolicyViolationException(
+        `Card ${card.id} cannot transition from ${card.status}`,
+      );
     }
   }
 
-  private recordDeclinedTransaction(card: CardRecord, dto: AuthorizeCardTransactionDto, declineReason: CardDeclineReason, performedBy: string): CardTransactionResponseDto {
+  private recordDeclinedTransaction(
+    card: CardRecord,
+    dto: AuthorizeCardTransactionDto,
+    declineReason: CardDeclineReason,
+    performedBy: string,
+  ): CardTransactionResponseDto {
     const transaction: CardTransactionRecord = {
       id: randomUUID(),
       cardId: card.id,
@@ -704,7 +964,12 @@ export class CardService {
     this.eventEmitter.emit(eventName, payload);
   }
 
-  private audit(action: string, card: CardRecord, performedBy: string, details?: Record<string, string>): void {
+  private audit(
+    action: string,
+    card: CardRecord,
+    performedBy: string,
+    details?: Record<string, string>,
+  ): void {
     this.auditLog.push({
       cardId: card.id,
       action,

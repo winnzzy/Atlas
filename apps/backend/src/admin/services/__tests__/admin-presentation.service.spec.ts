@@ -4,25 +4,30 @@ import type { PrismaService } from '../../../prisma/prisma.service';
 import { AdminPolicy } from '../../policies/admin.policy';
 import { AdminPresentationService } from '../admin-presentation.service';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Row = Record<string, any>;
 
-function buildPrisma(options: { account?: Row | null; holder?: Row | null; user?: Row | null } = {}) {
-  const account: Row | null = options.account === undefined
-    ? {
-        id: 'acc-1',
-        accountNumber: '0000012345',
-        name: 'Everyday Checking',
-        currency: 'USD',
-        status: 'ACTIVE',
-        currentBalance: new Decimal(0),
-        availableBalance: new Decimal(0),
-        holdAmount: new Decimal(0),
-        deletedAt: null,
-      }
-    : options.account;
+function buildPrisma(
+  options: { account?: Row | null; holder?: Row | null; user?: Row | null } = {},
+) {
+  const account: Row | null =
+    options.account === undefined
+      ? {
+          id: 'acc-1',
+          accountNumber: '0000012345',
+          name: 'Everyday Checking',
+          currency: 'USD',
+          status: 'ACTIVE',
+          currentBalance: new Decimal(0),
+          availableBalance: new Decimal(0),
+          holdAmount: new Decimal(0),
+          deletedAt: null,
+        }
+      : options.account;
 
   const user = options.user === undefined ? { id: 'user-1', deletedAt: null } : options.user;
-  const holder = options.holder === undefined ? { userId: 'user-1', accountId: 'acc-1' } : options.holder;
+  const holder =
+    options.holder === undefined ? { userId: 'user-1', accountId: 'acc-1' } : options.holder;
 
   const transactions: Row[] = [];
   const lines: Row[] = [];
@@ -52,7 +57,9 @@ function buildPrisma(options: { account?: Row | null; holder?: Row | null; user?
       count: jest.fn(async () => transactions.length),
       findMany: jest.fn(async ({ where }: Row = {}) => {
         if (isPresentationFilter(where)) {
-          return transactions.filter((t) => t.metadata?.presentation === true).map((t) => ({ ...t }));
+          return transactions
+            .filter((t) => t.metadata?.presentation === true)
+            .map((t) => ({ ...t }));
         }
         return transactions.map((t) => ({ ...t }));
       }),
@@ -206,13 +213,17 @@ describe('AdminPresentationService', () => {
   it('rejects generation when the target customer does not exist', async () => {
     const prisma = buildPrisma({ user: null });
     const service = makeService(prisma);
-    await expect(service.generate('user-x', { accountId: 'acc-1' })).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.generate('user-x', { accountId: 'acc-1' })).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 
   it('rejects generation when the account does not belong to the customer', async () => {
     const prisma = buildPrisma({ holder: null });
     const service = makeService(prisma);
-    await expect(service.generate('user-1', { accountId: 'acc-1' })).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.generate('user-1', { accountId: 'acc-1' })).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
     // No money moved.
     expect(prisma.transaction.create).not.toHaveBeenCalled();
     expect(prisma.bankAccount.update).not.toHaveBeenCalled();
@@ -226,7 +237,9 @@ describe('AdminPresentationService', () => {
     const firstCount = prisma.__state.transactions.length;
 
     // Second run without replace is blocked.
-    await expect(service.generate('user-1', { accountId: 'acc-1' })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.generate('user-1', { accountId: 'acc-1' })).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
     expect(prisma.__state.transactions.length).toBe(firstCount);
 
     // Replace regenerates atomically and still closes at the target.
@@ -247,7 +260,9 @@ describe('AdminPresentationService', () => {
     });
     const service = makeService(prisma);
 
-    await expect(service.generate('user-1', { accountId: 'acc-1' })).rejects.toThrow(/simulated db failure/);
+    await expect(service.generate('user-1', { accountId: 'acc-1' })).rejects.toThrow(
+      /simulated db failure/,
+    );
     // The account balance was never committed to the target.
     expect(new Decimal(prisma.__state.account.currentBalance).toFixed(2)).toBe('0.00');
   });
@@ -276,6 +291,8 @@ describe('presentation authorization', () => {
 
   it('blocks lower-privileged roles from running the generator', () => {
     expect(() => policy.assertAllowed('SUPPORT', 'transaction.manage')).toThrow(ForbiddenException);
-    expect(() => policy.assertAllowed('OPERATIONS', 'transaction.manage')).toThrow(ForbiddenException);
+    expect(() => policy.assertAllowed('OPERATIONS', 'transaction.manage')).toThrow(
+      ForbiddenException,
+    );
   });
 });

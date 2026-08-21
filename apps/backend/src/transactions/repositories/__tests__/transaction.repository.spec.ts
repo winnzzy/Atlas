@@ -9,7 +9,10 @@ const DEST_UUID = '22222222-2222-4222-8222-222222222222';
 const TXN_UUID = '33333333-3333-4333-8333-333333333333';
 
 type LineCreate = { data: { entryType: string; accountCode: string; amount: Decimal } };
-type AccountUpdate = { where: { id: string }; data: { currentBalance: Decimal; availableBalance: Decimal } };
+type AccountUpdate = {
+  where: { id: string };
+  data: { currentBalance: Decimal; availableBalance: Decimal };
+};
 
 /**
  * A minimal Prisma double for applyBalanceMutation. It records the writes so we
@@ -18,9 +21,36 @@ type AccountUpdate = { where: { id: string }; data: { currentBalance: Decimal; a
  * VARCHAR(20) column would reject the UUID and roll the whole transfer back.
  */
 function buildPrismaDouble() {
-  const accounts = new Map<string, { id: string; accountNumber: string; currentBalance: Decimal; availableBalance: Decimal; holdAmount: Decimal }>([
-    [SOURCE_UUID, { id: SOURCE_UUID, accountNumber: '000100200300', currentBalance: new Decimal('100.00'), availableBalance: new Decimal('100.00'), holdAmount: new Decimal('0') }],
-    [DEST_UUID, { id: DEST_UUID, accountNumber: '000900800700', currentBalance: new Decimal('5.00'), availableBalance: new Decimal('5.00'), holdAmount: new Decimal('0') }],
+  const accounts = new Map<
+    string,
+    {
+      id: string;
+      accountNumber: string;
+      currentBalance: Decimal;
+      availableBalance: Decimal;
+      holdAmount: Decimal;
+    }
+  >([
+    [
+      SOURCE_UUID,
+      {
+        id: SOURCE_UUID,
+        accountNumber: '000100200300',
+        currentBalance: new Decimal('100.00'),
+        availableBalance: new Decimal('100.00'),
+        holdAmount: new Decimal('0'),
+      },
+    ],
+    [
+      DEST_UUID,
+      {
+        id: DEST_UUID,
+        accountNumber: '000900800700',
+        currentBalance: new Decimal('5.00'),
+        availableBalance: new Decimal('5.00'),
+        holdAmount: new Decimal('0'),
+      },
+    ],
   ]);
 
   const lineCreates: LineCreate[] = [];
@@ -32,7 +62,9 @@ function buildPrismaDouble() {
       update: jest.fn().mockResolvedValue({}),
     },
     bankAccount: {
-      findUnique: jest.fn(({ where }: { where: { id: string } }) => Promise.resolve(accounts.get(where.id) ?? null)),
+      findUnique: jest.fn(({ where }: { where: { id: string } }) =>
+        Promise.resolve(accounts.get(where.id) ?? null),
+      ),
       update: jest.fn((args: AccountUpdate) => {
         accountUpdates.push(args);
         const account = accounts.get(args.where.id);
@@ -83,6 +115,7 @@ describe('TransactionRepository.applyBalanceMutation', () => {
     await repository.applyBalanceMutation(baseRecord({ type: TransactionType.ACH_DEBIT }));
 
     expect(lineCreates).toHaveLength(1);
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const line = lineCreates[0]!;
     expect(line.data.entryType).toBe('DEBIT');
     // Regression guard for the production failure: TransactionLine.accountCode is
@@ -96,8 +129,11 @@ describe('TransactionRepository.applyBalanceMutation', () => {
     const { prisma, accountUpdates, accounts } = buildPrismaDouble();
     const repository = new TransactionRepository(prisma);
 
-    await repository.applyBalanceMutation(baseRecord({ type: TransactionType.ACH_DEBIT, amount: '10.00' }));
+    await repository.applyBalanceMutation(
+      baseRecord({ type: TransactionType.ACH_DEBIT, amount: '10.00' }),
+    );
 
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const source = accounts.get(SOURCE_UUID)!;
     expect(source.currentBalance.toFixed(2)).toBe('90.00');
     expect(source.availableBalance.toFixed(2)).toBe('90.00');
@@ -109,7 +145,11 @@ describe('TransactionRepository.applyBalanceMutation', () => {
     const repository = new TransactionRepository(prisma);
 
     await repository.applyBalanceMutation(
-      baseRecord({ type: TransactionType.INTERNAL_TRANSFER, counterpartyAccountId: DEST_UUID, amount: '10.00' }),
+      baseRecord({
+        type: TransactionType.INTERNAL_TRANSFER,
+        counterpartyAccountId: DEST_UUID,
+        amount: '10.00',
+      }),
     );
 
     expect(lineCreates).toHaveLength(2);
@@ -117,7 +157,9 @@ describe('TransactionRepository.applyBalanceMutation', () => {
       expect(line.data.accountCode.length).toBeLessThanOrEqual(20);
       expect([SOURCE_UUID, DEST_UUID]).not.toContain(line.data.accountCode);
     }
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     expect(accounts.get(SOURCE_UUID)!.currentBalance.toFixed(2)).toBe('90.00');
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     expect(accounts.get(DEST_UUID)!.currentBalance.toFixed(2)).toBe('15.00');
   });
 });
