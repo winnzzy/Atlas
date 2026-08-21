@@ -27,8 +27,17 @@ import {
 import { BadRequestException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { AssetStatus } from '../enums/investment-status.enum';
+import { AssetClass } from '../enums/asset-class.enum';
 import { TransactionService } from '../../transactions/services/transaction.service';
 import { TransactionType } from '../../transactions/enums/transaction-type.enum';
+
+/**
+ * Admin balance adjustments (see {@link ApprovalService.adminAdjustBalance})
+ * are always denominated in US Dollars — the admin never picks a currency
+ * or crypto asset for this action. This is the symbol of the fixed cash
+ * product those adjustments post against, auto-provisioned on first use.
+ */
+export const ADMIN_BALANCE_CURRENCY = 'USD';
 
 @Injectable()
 export class ApprovalService {
@@ -359,6 +368,26 @@ export class ApprovalService {
   }
 
   /**
+   * Finds the fixed USD cash product that admin balance adjustments post
+   * against, creating it the first time it's needed. It carries a constant
+   * $1 price so its position quantity reads directly as a dollar amount.
+   */
+  private async ensureCashProduct() {
+    const created = await this.repository.createProduct({
+      symbol: ADMIN_BALANCE_CURRENCY,
+      name: 'US Dollar',
+      assetClass: AssetClass.MONEY_MARKET,
+      decimals: 2,
+    });
+    await this.repository.createPrice({
+      productId: created.id,
+      price: 1,
+      currency: ADMIN_BALANCE_CURRENCY,
+    });
+    return this.repository.findProductBySymbol(ADMIN_BALANCE_CURRENCY);
+  }
+
+  /**
    * Admin-only direct adjustment of a customer's holding for one asset — no
    * pending deposit/withdrawal request required. It updates the position and
    * writes a portfolio entry and a Transaction Engine record the exact same
@@ -388,7 +417,10 @@ export class ApprovalService {
       throw new BadRequestException('Amount must be a positive number');
     }
 
-    const product = await this.repository.findProductBySymbol(productSymbol);
+    let product = await this.repository.findProductBySymbol(productSymbol);
+    if (!product && productSymbol === ADMIN_BALANCE_CURRENCY) {
+      product = await this.ensureCashProduct();
+    }
     if (!product) {
       throw new AssetNotFoundException(productSymbol);
     }

@@ -155,10 +155,42 @@ describe('AdminOrchestrationService.applyCardAction — FREEZE/UNFREEZE', () => 
 });
 
 describe('AdminOrchestrationService.applyInvestmentAction — ADMIN_CREDIT/ADMIN_DEBIT', () => {
-  it('delegates to ApprovalService.adminAdjustBalance and audits with the real reason', async () => {
+  it('delegates to ApprovalService.adminAdjustBalance, always in USD, and audits with the real reason', async () => {
     const { service, approvalService, prisma } = buildService();
 
     const result = await service.applyInvestmentAction(
+      {
+        action: 'ADMIN_CREDIT',
+        userId: 'customer-1',
+        amount: 1,
+        reason: 'goodwill',
+      },
+      'admin-1',
+    );
+
+    expect(approvalService.adminAdjustBalance).toHaveBeenCalledWith(
+      'customer-1',
+      'USD',
+      'CREDIT',
+      1,
+      'admin-1',
+      false,
+    );
+    expect(result).toEqual(expect.objectContaining({ productSymbol: 'BTC' }));
+    expect(prisma.adminAction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: 'INVESTMENT_ADMIN_CREDIT',
+          details: expect.objectContaining({ currency: 'USD' }),
+        }),
+      }),
+    );
+  });
+
+  it('ignores any symbol the caller passes — the action is always posted in USD', async () => {
+    const { service, approvalService } = buildService();
+
+    await service.applyInvestmentAction(
       {
         action: 'ADMIN_CREDIT',
         userId: 'customer-1',
@@ -171,25 +203,26 @@ describe('AdminOrchestrationService.applyInvestmentAction — ADMIN_CREDIT/ADMIN
 
     expect(approvalService.adminAdjustBalance).toHaveBeenCalledWith(
       'customer-1',
-      'BTC',
+      'USD',
       'CREDIT',
       1,
       'admin-1',
       false,
     );
-    expect(result).toEqual(expect.objectContaining({ productSymbol: 'BTC' }));
-    expect(prisma.adminAction.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ action: 'INVESTMENT_ADMIN_CREDIT' }),
-      }),
-    );
   });
 
-  it('requires userId, symbol, amount and reason', async () => {
+  it('requires userId, amount and reason, but not a symbol', async () => {
     const { service } = buildService();
     await expect(
       service.applyInvestmentAction(
-        { action: 'ADMIN_CREDIT', symbol: 'BTC', amount: 1, reason: 'x' } as never,
+        { action: 'ADMIN_CREDIT', amount: 1, reason: 'x' } as never,
+        'admin-1',
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    await expect(
+      service.applyInvestmentAction(
+        { action: 'ADMIN_CREDIT', userId: 'customer-1', amount: 1 } as never,
         'admin-1',
       ),
     ).rejects.toBeInstanceOf(NotFoundException);

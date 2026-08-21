@@ -79,8 +79,7 @@ export default function AdminCustomerDetailPage() {
   const [histTotalAmount, setHistTotalAmount] = useState('');
   const [histTransactionCount, setHistTransactionCount] = useState('');
 
-  // Investment balance adjustment
-  const [investSymbol, setInvestSymbol] = useState('');
+  // Investment balance adjustment (always posted in USD)
   const [investAction, setInvestAction] = useState<'ADMIN_CREDIT' | 'ADMIN_DEBIT'>('ADMIN_CREDIT');
   const [investAmount, setInvestAmount] = useState('');
   const [investReason, setInvestReason] = useState('');
@@ -196,7 +195,6 @@ export default function AdminCustomerDetailPage() {
         applyAdminInvestmentAction({
           action: investAction,
           userId,
-          symbol: investSymbol.trim().toUpperCase(),
           amount: Number(investAmount),
           reason: investReason.trim(),
         }),
@@ -633,11 +631,11 @@ export default function AdminCustomerDetailPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-slate-600">
-            Directly credit or debit the customer&apos;s holding for an asset. It appears in their
-            portfolio and transaction history like an ordinary deposit or withdrawal; the reason is
-            recorded in the audit log only.
+            Directly credit or debit the customer&apos;s investment balance in US dollars. It
+            appears in their portfolio and transaction history like an ordinary deposit or
+            withdrawal; the reason is recorded in the audit log only.
           </p>
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-3">
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Action</label>
               <Select
@@ -651,17 +649,7 @@ export default function AdminCustomerDetailPage() {
               </Select>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Symbol</label>
-              <Input
-                value={investSymbol}
-                onChange={(event) => setInvestSymbol(event.target.value)}
-                placeholder="BTC"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">
-                Amount (units)
-              </label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Amount (USD)</label>
               <Input
                 value={investAmount}
                 onChange={(event) => setInvestAmount(event.target.value)}
@@ -682,7 +670,7 @@ export default function AdminCustomerDetailPage() {
             </div>
           </div>
           <Button
-            disabled={busy || !investSymbol.trim() || !investAmount || !investReason.trim()}
+            disabled={busy || !investAmount || !investReason.trim()}
             onClick={() => void runInvestmentAdjustment()}
           >
             {busy

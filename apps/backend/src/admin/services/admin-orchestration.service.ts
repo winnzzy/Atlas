@@ -5,7 +5,10 @@ import type { AuthenticatedUser } from '../../accounts/policies/account.policy';
 import { AccountService } from '../../accounts/services/account.service';
 import { CardService } from '../../cards/services/card.service';
 import type { CreateCardDto } from '../../cards/dto/cards.dto';
-import { ApprovalService } from '../../investments/services/approval.service';
+import {
+  ApprovalService,
+  ADMIN_BALANCE_CURRENCY,
+} from '../../investments/services/approval.service';
 import { AssetService } from '../../investments/services/asset.service';
 import { PortfolioService } from '../../investments/services/portfolio.service';
 import { PricingService } from '../../investments/services/pricing.service';
@@ -400,18 +403,20 @@ export class AdminOrchestrationService {
     adminId = ADMIN_ACTOR.id,
   ): Promise<unknown> {
     if (action.action === 'ADMIN_CREDIT' || action.action === 'ADMIN_DEBIT') {
-      if (!action.userId || !action.symbol || action.amount === undefined || !action.reason) {
+      if (!action.userId || action.amount === undefined || !action.reason) {
         throw new NotFoundException(
-          'userId, symbol, amount, and reason are required for admin balance adjustments',
+          'userId, amount, and reason are required for admin balance adjustments',
         );
       }
       if (!(action.amount > 0)) {
         throw new BadRequestException('Amount must be a positive number');
       }
 
+      // Admin balance adjustments are always posted in USD — the admin never
+      // selects a currency or crypto asset for this action.
       const result = await this.approvalService.adminAdjustBalance(
         action.userId,
-        action.symbol,
+        ADMIN_BALANCE_CURRENCY,
         action.action === 'ADMIN_CREDIT' ? 'CREDIT' : 'DEBIT',
         action.amount,
         adminId,
@@ -419,7 +424,7 @@ export class AdminOrchestrationService {
       );
 
       await this.recordAction(adminId, `INVESTMENT_${action.action}`, 'PORTFOLIO', action.userId, {
-        symbol: action.symbol,
+        currency: ADMIN_BALANCE_CURRENCY,
         amount: action.amount,
         reason: action.reason,
         force: action.force ?? false,

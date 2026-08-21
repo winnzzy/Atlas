@@ -301,7 +301,8 @@ export class InvestmentAdminActionDto {
   id?: string;
 
   @ApiPropertyOptional({
-    description: 'Asset symbol, required for UPDATE_PRICE and ADMIN_CREDIT/ADMIN_DEBIT',
+    description:
+      'Asset symbol, required for UPDATE_PRICE. Ignored for ADMIN_CREDIT/ADMIN_DEBIT, which are always posted in USD.',
   })
   @IsOptional()
   @IsString()

@@ -1,7 +1,7 @@
 import { Test } from '@nestjs/testing';
 import type { TestingModule } from '@nestjs/testing';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { ApprovalService } from '../approval.service';
+import { ApprovalService, ADMIN_BALANCE_CURRENCY } from '../approval.service';
 import { InvestmentRepository } from '../../repositories/investment.repository';
 import { InvestmentMapper } from '../../mappers/investment.mapper';
 import { InvestmentPolicy } from '../../policies/investment.policy';
@@ -65,6 +65,8 @@ describe('ApprovalService', () => {
       createEntry: jest.fn(),
       findPositionsByPortfolio: jest.fn(),
       updatePortfolioValue: jest.fn(),
+      createProduct: jest.fn(),
+      createPrice: jest.fn(),
     };
 
     const mockMapperObj = {
@@ -407,6 +409,51 @@ describe('ApprovalService', () => {
       await expect(
         service.adminAdjustBalance('user-1', 'DOGE', 'CREDIT', 1, 'admin-1'),
       ).rejects.toThrow(AssetNotFoundException);
+    });
+
+    it('auto-provisions the fixed USD cash product on first use', async () => {
+      const usdProduct = {
+        id: 'prod-usd',
+        symbol: ADMIN_BALANCE_CURRENCY,
+        status: 'ACTIVE',
+        priceHistory: [{ price: 1 }],
+      };
+      repository.findProductBySymbol.mockResolvedValueOnce(null);
+      repository.createProduct.mockResolvedValue({ id: 'prod-usd' } as never);
+      repository.createPrice.mockResolvedValue({} as never);
+      repository.findProductBySymbol.mockResolvedValueOnce(usdProduct as never);
+      repository.findPosition.mockResolvedValue(null);
+
+      const result = await service.adminAdjustBalance(
+        'user-1',
+        ADMIN_BALANCE_CURRENCY,
+        'CREDIT',
+        100,
+        'admin-1',
+      );
+
+      expect(repository.createProduct).toHaveBeenCalledWith(
+        expect.objectContaining({ symbol: ADMIN_BALANCE_CURRENCY }),
+      );
+      expect(repository.createPrice).toHaveBeenCalledWith(
+        expect.objectContaining({ productId: 'prod-usd', price: 1 }),
+      );
+      expect(result.newQuantity).toBe(100);
+    });
+
+    it('reuses the existing USD cash product without recreating it', async () => {
+      const usdProduct = {
+        id: 'prod-usd',
+        symbol: ADMIN_BALANCE_CURRENCY,
+        status: 'ACTIVE',
+        priceHistory: [{ price: 1 }],
+      };
+      repository.findProductBySymbol.mockResolvedValue(usdProduct as never);
+      repository.findPosition.mockResolvedValue(null);
+
+      await service.adminAdjustBalance('user-1', ADMIN_BALANCE_CURRENCY, 'CREDIT', 50, 'admin-1');
+
+      expect(repository.createProduct).not.toHaveBeenCalled();
     });
   });
 });
